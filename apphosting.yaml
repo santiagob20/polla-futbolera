@@ -1,0 +1,6 @@
+# Settings for Cloud Run service
+runConfig:
+  minInstances: 0
+  maxInstances: 10
+  memory: 512Mi
+  cpu: 1
