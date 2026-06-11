@@ -1,21 +1,30 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Reglas para usuarios (cada usuario puede leer todos los perfiles de los demás para el ranking, pero solo escribir el propio)
+    
+    // Función helper para verificar si el usuario logueado es administrador
+    function isAdmin() {
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // Reglas para usuarios (cada usuario puede leer todos, pero solo escribir el propio o si es administrador)
     match /users/{userId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && (request.auth.uid == userId || isAdmin());
     }
+    
     // Reglas para partidos (cualquier usuario logueado puede leerlos, solo admins pueden modificarlos)
     match /matches/{matchId} {
       allow read: if request.auth != null;
-      allow write: if false; // Solo se actualizan por backend o script admin (por ahora)
+      allow write: if isAdmin();
     }
-    // Reglas para predicciones (pueden ser leídas por cualquier usuario autenticado para ver los pronósticos de otros jugadores una vez empezado,
-    // pero solo creadas o actualizadas por el dueño. Además, añadimos validación para asegurar el userId coincide con la sesión)
+    
+    // Reglas para predicciones (el dueño puede leer y escribir, admins también pueden escribir y actualizar puntos)
     match /predictions/{predictionId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow write: if request.auth != null && (request.resource.data.userId == request.auth.uid || isAdmin());
     }
   }
 }
