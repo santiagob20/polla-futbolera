@@ -618,13 +618,13 @@ export default function Home() {
                     <h2 className="text-xl font-extrabold text-slate-200">Tabla de Clasificación</h2>
                     <p className="text-slate-400 text-xs mt-1">Conoce a los mejores pronosticadores de la copa</p>
                     
-                    <div className="mt-6 overflow-hidden rounded-xl border border-slate-950 bg-slate-950/20">
-                      <table className="w-full text-left border-collapse">
+                    <div className="mt-6 overflow-x-auto rounded-xl border border-slate-950 bg-slate-950/20">
+                      <table className="w-full text-left border-collapse min-w-[300px]">
                         <thead>
                           <tr className="bg-slate-900/60 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                            <th className="py-4 px-6 text-center w-16">Pos</th>
-                            <th className="py-4 px-6">Jugador</th>
-                            <th className="py-4 px-6 text-right w-24">Puntos</th>
+                            <th className="py-3 sm:py-4 px-3 sm:px-6 text-center w-16">Pos</th>
+                            <th className="py-3 sm:py-4 px-3 sm:px-6">Jugador</th>
+                            <th className="py-3 sm:py-4 px-3 sm:px-6 text-right w-24">Puntos</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-950">
@@ -637,13 +637,13 @@ export default function Home() {
                                   isMe ? "bg-emerald-500/5 text-emerald-400 font-bold" : "text-slate-300"
                                 }`}
                               >
-                                <td className="py-4 px-6 text-center font-extrabold">
+                                <td className="py-3 sm:py-4 px-3 sm:px-6 text-center font-extrabold">
                                   {index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : index + 1}
                                 </td>
-                                <td className="py-4 px-6 truncate max-w-[200px]">
+                                <td className="py-3 sm:py-4 px-3 sm:px-6 truncate max-w-[150px] sm:max-w-[200px]">
                                   {userProf.displayName} {isMe && <span className="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded ml-2">Tú</span>}
                                 </td>
-                                <td className="py-4 px-6 text-right font-extrabold text-emerald-400">
+                                <td className="py-3 sm:py-4 px-3 sm:px-6 text-right font-extrabold text-emerald-400">
                                   {userProf.points}
                                 </td>
                               </tr>
