@@ -19,13 +19,22 @@ interface UserProfile {
   isAdmin?: boolean;
 }
 
+export interface SavedAccount {
+  email: string;
+  name: string;
+  pass: string;
+}
+
 interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
+  savedAccounts: SavedAccount[];
   login: (email: string, pass: string) => Promise<void>;
   signup: (email: string, pass: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
+  switchAccount: (email: string) => Promise<void>;
+  removeSavedAccount: (email: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -34,8 +43,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);
 
   useEffect(() => {
+    // Cargar cuentas guardadas desde localStorage
+    try {
+      const stored = localStorage.getItem("polla_saved_accounts");
+      if (stored) {
+        setSavedAccounts(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error("Error loading saved accounts:", e);
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
@@ -64,10 +84,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
+  const saveAccountInfo = (email: string, pass: string, name: string) => {
+    try {
+      const stored = localStorage.getItem("polla_saved_accounts");
+      const list: SavedAccount[] = stored ? JSON.parse(stored) : [];
+      const filtered = list.filter(acc => acc.email !== email);
+      filtered.push({ email, name, pass });
+      // Guardamos un máximo de 5 cuentas
+      if (filtered.length > 5) filtered.shift();
+      localStorage.setItem("polla_saved_accounts", JSON.stringify(filtered));
+      setSavedAccounts(filtered);
+    } catch (e) {
+      console.error("Error saving account info:", e);
+    }
+  };
+
   const login = async (email: string, pass: string) => {
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, pass);
+      const cred = await signInWithEmailAndPassword(auth, email, pass);
+      
+      // Obtener el perfil para el nombre
+      const userDocRef = doc(db, "users", cred.user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      const displayName = userDocSnap.exists() 
+        ? (userDocSnap.data() as UserProfile).displayName 
+        : email.split("@")[0];
+
+      saveAccountInfo(email, pass, displayName);
     } catch (error) {
       setLoading(false);
       throw error;
@@ -86,6 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       await setDoc(doc(db, "users", cred.user.uid), newProfile);
       setProfile(newProfile);
+      saveAccountInfo(email, pass, name);
     } catch (error) {
       setLoading(false);
       throw error;
@@ -97,8 +142,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signOut(auth);
   };
 
+  const switchAccount = async (email: string) => {
+    const acc = savedAccounts.find(a => a.email === email);
+    if (!acc) return;
+    setLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, acc.email, acc.pass);
+    } catch (error) {
+      setLoading(false);
+      throw error;
+    }
+  };
+
+  const removeSavedAccount = (email: string) => {
+    const filtered = savedAccounts.filter(a => a.email !== email);
+    localStorage.setItem("polla_saved_accounts", JSON.stringify(filtered));
+    setSavedAccounts(filtered);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      profile, 
+      loading, 
+      savedAccounts, 
+      login, 
+      signup, 
+      logout, 
+      switchAccount, 
+      removeSavedAccount 
+    }}>
       {children}
     </AuthContext.Provider>
   );

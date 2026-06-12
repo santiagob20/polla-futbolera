@@ -48,7 +48,17 @@ interface UserProfile {
 }
 
 export default function Home() {
-  const { user, profile, loading, login, signup, logout } = useAuth();
+  const { 
+    user, 
+    profile, 
+    loading, 
+    savedAccounts, 
+    login, 
+    signup, 
+    logout, 
+    switchAccount, 
+    removeSavedAccount 
+  } = useAuth();
   
   // Auth state inputs
   const [email, setEmail] = useState("");
@@ -107,6 +117,8 @@ export default function Home() {
     if (!user) return;
 
     setDataLoading(true);
+    setPredictions({});
+    setPredictionDrafts({});
 
     // 1. Sync Matches
     const qMatches = query(collection(db, "matches"), orderBy("num", "asc"));
@@ -157,7 +169,7 @@ export default function Home() {
           };
         }
       });
-      setPredictionDrafts((prev) => ({ ...drafts, ...prev }));
+      setPredictionDrafts(drafts);
     });
 
     // 3. Sync Leaderboard / Users
@@ -311,6 +323,53 @@ export default function Home() {
             </p>
           </div>
 
+          {savedAccounts.length > 0 && !isRegistering && (
+            <div className="mb-6 border-b border-slate-800/60 pb-5">
+              <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5">
+                Ingresar con cuenta guardada:
+              </span>
+              <div className="space-y-2">
+                {savedAccounts.map((acc) => (
+                  <div 
+                    key={acc.email} 
+                    className="flex items-center justify-between p-2.5 bg-slate-950/40 hover:bg-slate-950/80 border border-slate-850 rounded-xl transition-all group"
+                  >
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setAuthError("");
+                        setAuthLoading(true);
+                        try {
+                          await switchAccount(acc.email);
+                        } catch (err: any) {
+                          setAuthError("No se pudo iniciar sesión de forma automática.");
+                        } finally {
+                          setAuthLoading(false);
+                        }
+                      }}
+                      className="flex-1 text-left flex flex-col"
+                    >
+                      <span className="font-bold text-xs text-slate-200 group-hover:text-emerald-400 transition-colors">
+                        {acc.name}
+                      </span>
+                      <span className="text-[10px] text-slate-400 truncate max-w-[200px]">
+                        {acc.email}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeSavedAccount(acc.email)}
+                      className="text-slate-500 hover:text-rose-400 text-xs p-1 transition-colors"
+                      title="Eliminar"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleAuthSubmit} className="space-y-4">
             {isRegistering && (
               <div>
@@ -415,6 +474,30 @@ export default function Home() {
               <span className="text-amber-400 font-bold">⭐</span>
               <span className="font-extrabold text-emerald-400 text-sm">{profile?.points ?? 0} Pts</span>
             </div>
+
+            {savedAccounts.filter(acc => acc.email !== user?.email).length > 0 && (
+              <select
+                onChange={async (e) => {
+                  if (e.target.value) {
+                    try {
+                      await switchAccount(e.target.value);
+                    } catch (err) {
+                      alert("Error al cambiar de cuenta");
+                    }
+                  }
+                  e.target.value = "";
+                }}
+                className="px-2.5 py-1.5 bg-slate-850 hover:bg-slate-800 text-slate-300 text-xs font-semibold rounded-lg border border-slate-750 focus:outline-none cursor-pointer"
+                defaultValue=""
+              >
+                <option value="" disabled>Cambiar Cuenta</option>
+                {savedAccounts.filter(acc => acc.email !== user?.email).map(acc => (
+                  <option key={acc.email} value={acc.email}>
+                    {acc.name}
+                  </option>
+                ))}
+              </select>
+            )}
 
             <button
               onClick={logout}
