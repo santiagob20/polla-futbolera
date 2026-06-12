@@ -74,6 +74,7 @@ export default function Home() {
   // Data lists
   const [matches, setMatches] = useState<Match[]>([]);
   const [predictions, setPredictions] = useState<{ [matchId: string]: Prediction }>({});
+  const [allPredictions, setAllPredictions] = useState<Prediction[]>([]);
   const [leaderboard, setLeaderboard] = useState<UserProfile[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
@@ -90,6 +91,7 @@ export default function Home() {
   const [adminUserPredictions, setAdminUserPredictions] = useState<{ [matchId: string]: Prediction }>({});
   const [adminUserDrafts, setAdminUserDrafts] = useState<{ [matchId: string]: { goals1: string; goals2: string } }>({});
   const [adminSavingUserPreds, setAdminSavingUserPreds] = useState<{ [matchId: string]: boolean }>({});
+  const [adminRecalculating, setAdminRecalculating] = useState(false);
 
   // Auth Handler
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -155,18 +157,20 @@ export default function Home() {
     const qPreds = query(collection(db, "predictions"));
     const unsubPreds = onSnapshot(qPreds, (snapshot) => {
       const userPreds: { [matchId: string]: Prediction } = {};
+      const allPredsList: Prediction[] = [];
       snapshot.forEach((doc) => {
         const data = doc.data() as Prediction;
+        allPredsList.push(data);
         if (data.userId === user.uid) {
           userPreds[data.matchId] = data;
         }
       });
       setPredictions(userPreds);
+      setAllPredictions(allPredsList);
       
       // Initialize prediction drafts with existing values
       const drafts: { [matchId: string]: { goals1: string; goals2: string } } = {};
-      snapshot.forEach((doc) => {
-        const data = doc.data() as Prediction;
+      allPredsList.forEach((data) => {
         if (data.userId === user.uid) {
           drafts[data.matchId] = {
             goals1: String(data.goals1),
@@ -376,6 +380,118 @@ export default function Home() {
     }
   };
 
+  const recalculateAllScores = async () => {
+    if (adminRecalculating) return;
+    const confirmRecalc = window.confirm("¿Estás seguro de que deseas recalcular y actualizar en la base de datos los puntos de todos los usuarios y predicciones? Esto resolverá cualquier descuadre.");
+    if (!confirmRecalc) return;
+
+    setAdminRecalculating(true);
+    try {
+      const matchesSnap = await getDocs(collection(db, "matches"));
+      const predsSnap = await getDocs(collection(db, "predictions"));
+      
+      const matchesMap: { [id: string]: Match } = {};
+      matchesSnap.forEach(doc => {
+        matchesMap[doc.id] = { ...doc.data() as Match, id: doc.id };
+      });
+
+      const userPointsMap: { [userId: string]: number } = {};
+      const batch = writeBatch(db);
+
+      predsSnap.forEach(pDoc => {
+        const pred = pDoc.data() as Prediction;
+        const match = matchesMap[pred.matchId];
+        
+        let pts = 0;
+        if (match && match.result) {
+          pts = calculatePoints(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2);
+        }
+
+        if (pred.points !== pts) {
+          batch.update(doc(db, "predictions", pred.id), { points: pts });
+        }
+
+        if (!userPointsMap[pred.userId]) {
+          userPointsMap[pred.userId] = 0;
+        }
+        userPointsMap[pred.userId] += pts;
+      });
+
+      const usersSnap = await getDocs(collection(db, "users"));
+      usersSnap.forEach(uDoc => {
+        const uid = uDoc.id;
+        const pts = userPointsMap[uid] || 0;
+        batch.update(doc(db, "users", uid), { points: pts });
+      });
+
+      await batch.commit();
+      alert("¡Todos los puntajes de las predicciones y de los usuarios han sido recalculados y guardados con éxito en la base de datos!");
+    } catch (err) {
+      console.error("Error recalculating all scores:", err);
+      alert("Error al recalcular todos los puntajes en Firestore.");
+    } finally {
+      setAdminRecalculating(false);
+    }
+  };
+
+  // Compute financial metrics dynamically in real-time
+  const financialStats = React.useMemo(() => {
+    const sortedMatches = [...matches].sort((a, b) => a.num - b.num);
+
+    const stats: { 
+      [userId: string]: { 
+        invested: number; 
+        winnings: number; 
+        balance: number; 
+        predictionsCount: number;
+      } 
+    } = {};
+
+    // Ensure all users in leaderboard are initialized
+    leaderboard.forEach(u => {
+      stats[u.uid] = { invested: 0, winnings: 0, balance: 0, predictionsCount: 0 };
+    });
+
+    let rollover = 0;
+
+    sortedMatches.forEach(match => {
+      if (!match.result) return;
+
+      const matchPreds = allPredictions.filter(p => p.matchId === match.id);
+      if (matchPreds.length === 0) return;
+
+      matchPreds.forEach(pred => {
+        if (!stats[pred.userId]) {
+          stats[pred.userId] = { invested: 0, winnings: 0, balance: 0, predictionsCount: 0 };
+        }
+        stats[pred.userId].predictionsCount += 1;
+        stats[pred.userId].invested += 500;
+      });
+
+      const totalPoolForMatch = (matchPreds.length * 500) + rollover;
+
+      const winners = matchPreds.filter(pred => 
+        pred.goals1 === match.result!.goals1 && pred.goals2 === match.result!.goals2
+      );
+
+      if (winners.length > 0) {
+        const winAmountPerUser = totalPoolForMatch / winners.length;
+        winners.forEach(winner => {
+          stats[winner.userId].winnings += winAmountPerUser;
+        });
+        rollover = 0;
+      } else {
+        rollover = totalPoolForMatch;
+      }
+    });
+
+    Object.keys(stats).forEach(uid => {
+      stats[uid].balance = stats[uid].winnings - stats[uid].invested;
+    });
+
+    return { stats, currentRollover: rollover };
+  }, [matches, allPredictions, leaderboard]);
+
   // Unique list of rounds for filtering
   const rounds = ["Todos", "Matchday 1", "Matchday 2", "Matchday 3", "Matchday 4", "Matchday 5", "Matchday 6", "Matchday 7", "Matchday 8", "Matchday 9", "Matchday 10", "Matchday 11", "Matchday 12", "Matchday 13", "Matchday 14", "Matchday 15", "Matchday 16", "Matchday 17", "Round of 32", "Round of 16", "Quarter-final", "Semi-final", "Match for third place", "Final"];
 
@@ -557,9 +673,19 @@ export default function Home() {
               <span className="font-semibold text-slate-200">{profile?.displayName}</span>
             </div>
             
-            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-full px-4 py-1.5 flex items-center space-x-1.5">
-              <span className="text-amber-400 font-bold">⭐</span>
-              <span className="font-extrabold text-emerald-400 text-sm">{profile?.points ?? 0} Pts</span>
+            <div className="flex items-center space-x-2">
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-full px-4 py-1.5 flex items-center space-x-1.5">
+                <span className="text-amber-400 font-bold">⭐</span>
+                <span className="font-extrabold text-emerald-400 text-sm">{profile?.points ?? 0} Pts</span>
+              </div>
+
+              {user && financialStats.stats[user.uid] && (
+                <div className="hidden md:flex items-center space-x-3 bg-slate-900/60 border border-slate-800 rounded-full px-4 py-1.5 text-[11px] text-slate-350">
+                  <span>Debe aportar: <strong className="text-slate-200">${financialStats.stats[user.uid].invested} COP</strong></span>
+                  <span className="text-slate-700">|</span>
+                  <span>Premios Ganados: <strong className="text-emerald-400">${financialStats.stats[user.uid].winnings.toFixed(0)} COP</strong></span>
+                </div>
+              )}
             </div>
 
             {savedAccounts.filter(acc => acc.email !== user?.email).length > 0 && (
@@ -770,10 +896,8 @@ export default function Home() {
                                     {match.result?.isFinal === false ? "En Vivo: " : "Final: "}{match.result?.goals1} - {match.result?.goals2}
                                   </span>
                                   <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
-                                    (pred?.points ?? 0) === 3 
+                                    (pred?.points ?? 0) === 1 
                                       ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
-                                      : (pred?.points ?? 0) === 1 
-                                      ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" 
                                       : "bg-slate-800 text-slate-500"
                                   }`}>
                                     +{pred?.points ?? 0} Pts {match.result?.isFinal === false ? "(Prov.)" : ""}
@@ -804,30 +928,49 @@ export default function Home() {
                     <h2 className="text-xl font-extrabold text-slate-200">Tabla de Clasificación</h2>
                     <p className="text-slate-400 text-xs mt-1">Conoce a los mejores pronosticadores de la copa</p>
                     
+                    {financialStats.currentRollover > 0 && (
+                      <div className="mt-4 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs px-4 py-3 rounded-xl flex items-center justify-between">
+                        <span>💰 <strong>Bolsa Acumulada:</strong> Nadie acertó el marcador exacto en el último partido. El pozo acumulado para el próximo partido es de <strong>${financialStats.currentRollover} COP</strong>.</span>
+                      </div>
+                    )}
+
                     <div className="mt-6 overflow-x-auto rounded-xl border border-slate-950 bg-slate-950/20">
-                      <table className="w-full text-left border-collapse min-w-[300px]">
+                      <table className="w-full text-left border-collapse min-w-[500px]">
                         <thead>
-                          <tr className="bg-slate-900/60 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                          <tr className="bg-slate-900/60 text-slate-400 text-[10px] sm:text-xs font-semibold uppercase tracking-wider">
                             <th className="py-3 sm:py-4 px-3 sm:px-6 text-center w-16">Pos</th>
                             <th className="py-3 sm:py-4 px-3 sm:px-6">Jugador</th>
+                            <th className="py-3 sm:py-4 px-3 sm:px-6 text-center">Apostados</th>
+                            <th className="py-3 sm:py-4 px-3 sm:px-6 text-right">Inversión</th>
+                            <th className="py-3 sm:py-4 px-3 sm:px-6 text-right">Premios</th>
                             <th className="py-3 sm:py-4 px-3 sm:px-6 text-right w-24">Puntos</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-950">
                           {leaderboard.map((userProf, index) => {
                             const isMe = userProf.uid === user.uid;
+                            const userStats = financialStats.stats[userProf.uid] || { invested: 0, winnings: 0, balance: 0, predictionsCount: 0 };
                             return (
                               <tr 
                                 key={userProf.uid} 
-                                className={`text-sm hover:bg-slate-900/20 transition-colors ${
+                                className={`text-xs sm:text-sm hover:bg-slate-900/20 transition-colors ${
                                   isMe ? "bg-emerald-500/5 text-emerald-400 font-bold" : "text-slate-300"
                                 }`}
                               >
                                 <td className="py-3 sm:py-4 px-3 sm:px-6 text-center font-extrabold">
                                   {index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : index + 1}
                                 </td>
-                                <td className="py-3 sm:py-4 px-3 sm:px-6 truncate max-w-[150px] sm:max-w-[200px]">
-                                  {userProf.displayName} {isMe && <span className="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded ml-2">Tú</span>}
+                                <td className="py-3 sm:py-4 px-3 sm:px-6 truncate max-w-[120px] sm:max-w-[200px]">
+                                  {userProf.displayName} {isMe && <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded ml-2">Tú</span>}
+                                </td>
+                                <td className="py-3 sm:py-4 px-3 sm:px-6 text-center text-slate-400">
+                                  {userStats.predictionsCount}
+                                </td>
+                                <td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-slate-400">
+                                  ${userStats.invested}
+                                </td>
+                                <td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-emerald-400">
+                                  ${userStats.winnings.toFixed(0)}
                                 </td>
                                 <td className="py-3 sm:py-4 px-3 sm:px-6 text-right font-extrabold text-emerald-400">
                                   {userProf.points}
@@ -847,10 +990,21 @@ export default function Home() {
                 <div className="space-y-6">
                   {/* Admin Header & Sub-Tabs */}
                   <div className="bg-gradient-to-r from-amber-500/10 to-yellow-500/5 border border-amber-500/20 rounded-2xl p-5">
-                    <h2 className="text-xl font-extrabold text-amber-400">Panel de Administración</h2>
-                    <p className="text-slate-400 text-xs mt-1">
-                      Controla los resultados reales del mundial o ajusta las predicciones de los participantes de forma manual.
-                    </p>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <h2 className="text-xl font-extrabold text-amber-400">Panel de Administración</h2>
+                        <p className="text-slate-400 text-xs mt-1">
+                          Controla los resultados reales del mundial o ajusta las predicciones de los participantes de forma manual.
+                        </p>
+                      </div>
+                      <button
+                        onClick={recalculateAllScores}
+                        disabled={adminRecalculating}
+                        className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-all self-start md:self-center"
+                      >
+                        {adminRecalculating ? "Recalculando..." : "🔄 Recalcular Todos los Puntos"}
+                      </button>
+                    </div>
                     
                     {/* Sub-Tabs Navigation */}
                     <div className="flex space-x-2 mt-4 border-t border-slate-900 pt-4">
@@ -1134,10 +1288,8 @@ export default function Home() {
                                     {/* Points Indicator if match has result */}
                                     {hasResult && pred && (
                                       <span className={`text-xs font-bold px-2 py-1.5 rounded-lg border ${
-                                        pred.points === 3 
+                                        pred.points === 1 
                                           ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
-                                          : pred.points === 1 
-                                          ? "bg-amber-500/10 text-amber-400 border-amber-500/20" 
                                           : "bg-slate-800 text-slate-500 border-transparent"
                                       }`}>
                                         +{pred.points} Pts
