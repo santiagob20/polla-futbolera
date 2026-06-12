@@ -541,7 +541,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <span className="text-2xl">🏆</span>
-            <div className="flex flex-col">
+            <div className="hidden sm:flex flex-col">
               <span className="font-extrabold text-base sm:text-lg bg-gradient-to-r from-emerald-400 to-amber-300 bg-clip-text text-transparent leading-none">
                 Polla Mundial 2026
               </span>
