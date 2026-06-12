@@ -27,7 +27,7 @@ interface Match {
   group: string | null;
   ground: string;
   num: number;
-  result: { goals1: number; goals2: number } | null;
+  result: { goals1: number; goals2: number; isFinal?: boolean } | null;
 }
 
 interface Prediction {
@@ -73,7 +73,7 @@ export default function Home() {
   const [savingMatches, setSavingMatches] = useState<{ [matchId: string]: boolean }>({});
 
   // Admin inputs
-  const [adminResults, setAdminResults] = useState<{ [matchId: string]: { goals1: string; goals2: string } }>({});
+  const [adminResults, setAdminResults] = useState<{ [matchId: string]: { goals1: string; goals2: string; isFinal: boolean } }>({});
   const [adminSaving, setAdminSaving] = useState<{ [matchId: string]: boolean }>({});
 
   // Auth Handler
@@ -112,10 +112,26 @@ export default function Home() {
     const qMatches = query(collection(db, "matches"), orderBy("num", "asc"));
     const unsubMatches = onSnapshot(qMatches, (snapshot) => {
       const list: Match[] = [];
+      const adminDrafts: { [matchId: string]: { goals1: string; goals2: string; isFinal: boolean } } = {};
       snapshot.forEach((doc) => {
-        list.push({ ...doc.data() as Match, id: doc.id });
+        const m = doc.data() as Match;
+        list.push({ ...m, id: doc.id });
+        if (m.result) {
+          adminDrafts[doc.id] = {
+            goals1: String(m.result.goals1),
+            goals2: String(m.result.goals2),
+            isFinal: m.result.isFinal ?? true
+          };
+        } else {
+          adminDrafts[doc.id] = {
+            goals1: "",
+            goals2: "",
+            isFinal: true
+          };
+        }
       });
       setMatches(list);
+      setAdminResults((prev) => ({ ...adminDrafts, ...prev }));
     });
 
     // 2. Sync Current User's Predictions
@@ -212,7 +228,7 @@ export default function Home() {
       // 1. Update Match Doc
       const matchRef = doc(db, "matches", matchId);
       await setDoc(matchRef, {
-        result: { goals1: rg1, goals2: rg2 }
+        result: { goals1: rg1, goals2: rg2, isFinal: draft.isFinal ?? true }
       }, { merge: true });
 
       // 2. Fetch all predictions for this match
@@ -581,7 +597,7 @@ export default function Home() {
                               {hasResult ? (
                                 <div className="flex items-center space-x-2">
                                   <span className="text-xs bg-slate-950 border border-slate-800 text-slate-400 px-2.5 py-1 rounded-lg">
-                                    Final: {match.result?.goals1} - {match.result?.goals2}
+                                    {match.result?.isFinal === false ? "En Vivo: " : "Final: "}{match.result?.goals1} - {match.result?.goals2}
                                   </span>
                                   <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
                                     (pred?.points ?? 0) === 3 
@@ -590,7 +606,7 @@ export default function Home() {
                                       ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" 
                                       : "bg-slate-800 text-slate-500"
                                   }`}>
-                                    +{pred?.points ?? 0} Pts
+                                    +{pred?.points ?? 0} Pts {match.result?.isFinal === false ? "(Prov.)" : ""}
                                   </span>
                                 </div>
                               ) : (
@@ -732,6 +748,21 @@ export default function Home() {
                               className="w-12 h-10 text-center bg-slate-950 border border-slate-800 focus:border-amber-500 text-md font-bold rounded-lg focus:outline-none text-amber-400"
                               placeholder={match.result ? String(match.result.goals2) : "-"}
                             />
+
+                            <label className="flex items-center space-x-1.5 cursor-pointer select-none text-xs text-slate-300">
+                              <input
+                                type="checkbox"
+                                checked={draft.isFinal ?? true}
+                                onChange={(e) => {
+                                  setAdminResults(prev => ({
+                                    ...prev,
+                                    [match.id]: { ...draft, isFinal: e.target.checked }
+                                  }));
+                                }}
+                                className="rounded border-slate-800 text-amber-500 focus:ring-amber-500 bg-slate-950 w-4 h-4"
+                              />
+                              <span>Final</span>
+                            </label>
 
                             <button
                               onClick={() => saveMatchResult(match.id)}
