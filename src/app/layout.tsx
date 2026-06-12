@@ -33,7 +33,7 @@ export default function RootLayout({
         <meta httpEquiv="Pragma" content="no-cache" />
         <meta httpEquiv="Expires" content="0" />
       </head>
-      <body className="min-h-full bg-slate-950 text-slate-100 flex flex-col font-sans">
+      <body className="min-h-full bg-slate-950 text-slate-100 flex flex-col font-sans overflow-x-hidden">
         <AuthProvider>
           {children}
         </AuthProvider>

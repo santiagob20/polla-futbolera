@@ -651,7 +651,7 @@ export default function Home() {
 
   // Logged in user dashboard
   return (
-    <div className="flex-1 flex flex-col bg-slate-950 min-h-screen">
+    <div className="flex-1 flex flex-col bg-slate-950 min-h-screen overflow-x-hidden">
       {/* Header */}
       <header className="bg-slate-900/40 backdrop-blur-md border-b border-slate-900 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
