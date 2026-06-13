@@ -13,7 +13,7 @@ import {
   writeBatch 
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { calculatePoints } from "@/lib/scoreCalculator";
+import { calculatePoints, calculatePointsOld, calculatePointsNew } from "@/lib/scoreCalculator";
 import { getFlagUrl } from "@/lib/flags";
 
 // Interfaces
@@ -44,6 +44,7 @@ interface UserProfile {
   email: string;
   displayName: string;
   points: number;
+  previousPoints?: number;
   isAdmin?: boolean;
 }
 
@@ -120,6 +121,9 @@ export default function Home() {
 
   // Tabs: 'matches', 'leaderboard', 'admin'
   const [activeTab, setActiveTab] = useState<"matches" | "leaderboard" | "admin">("matches");
+  
+  // Leaderboard Phase: 'new' (from June 13 onwards), 'old' (up to June 12)
+  const [leaderboardPhase, setLeaderboardPhase] = useState<"new" | "old">("new");
   
   // Data lists
   const [matches, setMatches] = useState<Match[]>([]);
@@ -299,7 +303,9 @@ export default function Home() {
       
       let pts = 0;
       if (match?.result) {
-        pts = calculatePoints(g1, g2, match.result.goals1, match.result.goals2);
+        pts = (match.date < "2026-06-13")
+          ? calculatePointsOld(g1, g2, match.result.goals1, match.result.goals2)
+          : calculatePointsNew(g1, g2, match.result.goals1, match.result.goals2);
       }
 
       await setDoc(doc(db, "predictions", predId), {
@@ -312,16 +318,29 @@ export default function Home() {
       });
 
       const allPredsSnap = await getDocs(collection(db, "predictions"));
+      const matchesSnap = await getDocs(collection(db, "matches"));
+      const matchesMap: { [id: string]: Match } = {};
+      matchesSnap.forEach(d => {
+        matchesMap[d.id] = { ...d.data() as Match, id: d.id };
+      });
+
       let totalPoints = 0;
+      let totalPreviousPoints = 0;
       allPredsSnap.forEach((pDoc) => {
         const pred = pDoc.data() as Prediction;
         if (pred.userId === adminSelectedUserId) {
-          totalPoints += pred.points || 0;
+          const m = matchesMap[pred.matchId];
+          if (m && m.date < "2026-06-13") {
+            totalPreviousPoints += pred.points || 0;
+          } else {
+            totalPoints += pred.points || 0;
+          }
         }
       });
 
       await setDoc(doc(db, "users", adminSelectedUserId), {
-        points: totalPoints
+        points: totalPoints,
+        previousPoints: totalPreviousPoints
       }, { merge: true });
 
     } catch (err) {
@@ -349,7 +368,9 @@ export default function Home() {
       
       let pts = 0;
       if (match?.result) {
-        pts = calculatePoints(g1, g2, match.result.goals1, match.result.goals2);
+        pts = (match.date < "2026-06-13")
+          ? calculatePointsOld(g1, g2, match.result.goals1, match.result.goals2)
+          : calculatePointsNew(g1, g2, match.result.goals1, match.result.goals2);
       }
 
       await setDoc(doc(db, "predictions", predId), {
@@ -388,13 +409,15 @@ export default function Home() {
       // 2. Fetch all predictions for this match
       const predSnap = await getDocs(collection(db, "predictions"));
       const batch = writeBatch(db);
-      
-      const updatedUserIds = new Set<string>();
+       const updatedUserIds = new Set<string>();
+      const match = matches.find(m => m.id === matchId);
 
       predSnap.forEach((pDoc) => {
         const pred = pDoc.data() as Prediction;
         if (pred.matchId === matchId) {
-          const pts = calculatePoints(pred.goals1, pred.goals2, rg1, rg2);
+          const pts = (match && match.date < "2026-06-13")
+            ? calculatePointsOld(pred.goals1, pred.goals2, rg1, rg2)
+            : calculatePointsNew(pred.goals1, pred.goals2, rg1, rg2);
           batch.update(doc(db, "predictions", pred.id), { points: pts });
           updatedUserIds.add(pred.userId);
         }
@@ -405,20 +428,39 @@ export default function Home() {
 
       // 3. Recalculate users points
       const allPredsSnap = await getDocs(collection(db, "predictions"));
+      const matchesSnap = await getDocs(collection(db, "matches"));
+      const matchesMap: { [id: string]: Match } = {};
+      matchesSnap.forEach(d => {
+        matchesMap[d.id] = { ...d.data() as Match, id: d.id };
+      });
+
       const userPointsMap: { [userId: string]: number } = {};
+      const userPreviousPointsMap: { [userId: string]: number } = {};
       
       allPredsSnap.forEach((pDoc) => {
         const pred = pDoc.data() as Prediction;
-        if (!userPointsMap[pred.userId]) {
-          userPointsMap[pred.userId] = 0;
+        const m = matchesMap[pred.matchId];
+        if (m && m.date < "2026-06-13") {
+          if (!userPreviousPointsMap[pred.userId]) {
+            userPreviousPointsMap[pred.userId] = 0;
+          }
+          userPreviousPointsMap[pred.userId] += pred.points || 0;
+        } else {
+          if (!userPointsMap[pred.userId]) {
+            userPointsMap[pred.userId] = 0;
+          }
+          userPointsMap[pred.userId] += pred.points || 0;
         }
-        userPointsMap[pred.userId] += pred.points || 0;
       });
 
       // Update users collection
       const userBatch = writeBatch(db);
-      Object.keys(userPointsMap).forEach((uid) => {
-        userBatch.update(doc(db, "users", uid), { points: userPointsMap[uid] });
+      const usersSnap = await getDocs(collection(db, "users"));
+      usersSnap.forEach(uDoc => {
+        const uid = uDoc.id;
+        const pts = userPointsMap[uid] || 0;
+        const prevPts = userPreviousPointsMap[uid] || 0;
+        userBatch.set(doc(db, "users", uid), { points: pts, previousPoints: prevPts }, { merge: true });
       });
       await userBatch.commit();
 
@@ -447,6 +489,7 @@ export default function Home() {
       });
 
       const userPointsMap: { [userId: string]: number } = {};
+      const userPreviousPointsMap: { [userId: string]: number } = {};
       const batch = writeBatch(db);
 
       predsSnap.forEach(pDoc => {
@@ -455,28 +498,38 @@ export default function Home() {
         
         let pts = 0;
         if (match && match.result) {
-          pts = calculatePoints(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2);
+          pts = (match.date < "2026-06-13")
+            ? calculatePointsOld(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2)
+            : calculatePointsNew(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2);
         }
 
         if (pred.points !== pts) {
           batch.update(doc(db, "predictions", pred.id), { points: pts });
         }
 
-        if (!userPointsMap[pred.userId]) {
-          userPointsMap[pred.userId] = 0;
+        if (match && match.date < "2026-06-13") {
+          if (!userPreviousPointsMap[pred.userId]) {
+            userPreviousPointsMap[pred.userId] = 0;
+          }
+          userPreviousPointsMap[pred.userId] += pts;
+        } else {
+          if (!userPointsMap[pred.userId]) {
+            userPointsMap[pred.userId] = 0;
+          }
+          userPointsMap[pred.userId] += pts;
         }
-        userPointsMap[pred.userId] += pts;
       });
 
       const usersSnap = await getDocs(collection(db, "users"));
       usersSnap.forEach(uDoc => {
         const uid = uDoc.id;
         const pts = userPointsMap[uid] || 0;
-        batch.update(doc(db, "users", uid), { points: pts });
+        const prevPts = userPreviousPointsMap[uid] || 0;
+        batch.set(doc(db, "users", uid), { points: pts, previousPoints: prevPts }, { merge: true });
       });
 
       await batch.commit();
-      alert("¡Todos los puntajes de las predicciones y de los usuarios han sido recalculados y guardados con éxito en la base de datos!");
+      alert("¡Todos los puntajes de las predicciones y de los usuarios (anteriores y nuevos) han sido recalculados y guardados con éxito en la base de datos!");
     } catch (err) {
       console.error("Error recalculating all scores:", err);
       alert("Error al recalcular todos los puntajes en Firestore.");
@@ -489,7 +542,16 @@ export default function Home() {
   const financialStats = React.useMemo(() => {
     const sortedMatches = [...matches].sort((a, b) => a.num - b.num);
 
-    const stats: { 
+    const statsOld: { 
+      [userId: string]: { 
+        invested: number; 
+        winnings: number; 
+        balance: number; 
+        predictionsCount: number;
+      } 
+    } = {};
+
+    const statsNew: { 
       [userId: string]: { 
         invested: number; 
         winnings: number; 
@@ -500,16 +562,21 @@ export default function Home() {
 
     // Ensure all users in leaderboard are initialized
     leaderboard.forEach(u => {
-      stats[u.uid] = { invested: 0, winnings: 0, balance: 0, predictionsCount: 0 };
+      statsOld[u.uid] = { invested: 0, winnings: 0, balance: 0, predictionsCount: 0 };
+      statsNew[u.uid] = { invested: 0, winnings: 0, balance: 0, predictionsCount: 0 };
     });
 
-    let rollover = 0;
+    let rolloverOld = 0;
+    let rolloverNew = 0;
 
     sortedMatches.forEach(match => {
       if (!match.result) return;
 
       const matchPreds = allPredictions.filter(p => p.matchId === match.id);
       if (matchPreds.length === 0) return;
+
+      const isOld = match.date < "2026-06-13";
+      const stats = isOld ? statsOld : statsNew;
 
       matchPreds.forEach(pred => {
         if (!stats[pred.userId]) {
@@ -519,29 +586,116 @@ export default function Home() {
         stats[pred.userId].invested += 500;
       });
 
-      const totalPoolForMatch = (matchPreds.length * 500) + rollover;
-
-      const winners = matchPreds.filter(pred => 
-        pred.goals1 === match.result!.goals1 && pred.goals2 === match.result!.goals2
-      );
-
-      if (winners.length > 0) {
-        const winAmountPerUser = totalPoolForMatch / winners.length;
-        winners.forEach(winner => {
-          stats[winner.userId].winnings += winAmountPerUser;
-        });
-        rollover = 0;
+      if (isOld) {
+        const totalPoolForMatch = (matchPreds.length * 500) + rolloverOld;
+        const winners = matchPreds.filter(pred => 
+          pred.goals1 === match.result!.goals1 && pred.goals2 === match.result!.goals2
+        );
+        if (winners.length > 0) {
+          const winAmountPerUser = totalPoolForMatch / winners.length;
+          winners.forEach(winner => {
+            statsOld[winner.userId].winnings += winAmountPerUser;
+          });
+          rolloverOld = 0;
+        } else {
+          rolloverOld = totalPoolForMatch;
+        }
       } else {
-        rollover = totalPoolForMatch;
+        const totalPoolForMatch = (matchPreds.length * 500) + rolloverNew;
+        const winners = matchPreds.filter(pred => 
+          pred.goals1 === match.result!.goals1 && pred.goals2 === match.result!.goals2
+        );
+        if (winners.length > 0) {
+          const winAmountPerUser = totalPoolForMatch / winners.length;
+          winners.forEach(winner => {
+            statsNew[winner.userId].winnings += winAmountPerUser;
+          });
+          rolloverNew = 0;
+        } else {
+          rolloverNew = totalPoolForMatch;
+        }
       }
     });
 
-    Object.keys(stats).forEach(uid => {
-      stats[uid].balance = stats[uid].winnings - stats[uid].invested;
+    Object.keys(statsOld).forEach(uid => {
+      statsOld[uid].balance = statsOld[uid].winnings - statsOld[uid].invested;
+    });
+    Object.keys(statsNew).forEach(uid => {
+      statsNew[uid].balance = statsNew[uid].winnings - statsNew[uid].invested;
     });
 
-    return { stats, currentRollover: rollover };
+    return { 
+      statsOld, 
+      statsNew, 
+      rolloverOld, 
+      rolloverNew,
+      // Fallbacks for header compatibility
+      stats: statsNew,
+      currentRollover: rolloverNew
+    };
   }, [matches, allPredictions, leaderboard]);
+
+  // Calculate points dynamically in real-time to guarantee correctness and avoid database mismatches
+  const calculatedPoints = React.useMemo(() => {
+    const pointsMap: { 
+      [userId: string]: { 
+        pointsOld: number; 
+        pointsNew: number; 
+      } 
+    } = {};
+
+    // Initialize all users in leaderboard
+    leaderboard.forEach(u => {
+      pointsMap[u.uid] = { pointsOld: 0, pointsNew: 0 };
+    });
+
+    const matchesMap: { [id: string]: Match } = {};
+    matches.forEach(m => {
+      matchesMap[m.id] = m;
+    });
+
+    allPredictions.forEach(pred => {
+      const match = matchesMap[pred.matchId];
+      if (match && match.result) {
+        const isOld = match.date < "2026-06-13";
+        const pts = isOld
+          ? calculatePointsOld(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2)
+          : calculatePointsNew(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2);
+
+        if (!pointsMap[pred.userId]) {
+          pointsMap[pred.userId] = { pointsOld: 0, pointsNew: 0 };
+        }
+
+        if (isOld) {
+          pointsMap[pred.userId].pointsOld += pts;
+        } else {
+          pointsMap[pred.userId].pointsNew += pts;
+        }
+      }
+    });
+
+    return pointsMap;
+  }, [matches, allPredictions, leaderboard]);
+
+  // Sort leaderboard depending on the selected phase
+  const sortedLeaderboard = React.useMemo(() => {
+    return [...leaderboard].sort((a, b) => {
+      const pointsA = calculatedPoints[a.uid] || { pointsOld: 0, pointsNew: 0 };
+      const pointsB = calculatedPoints[b.uid] || { pointsOld: 0, pointsNew: 0 };
+
+      if (leaderboardPhase === "new") {
+        if (pointsB.pointsNew !== pointsA.pointsNew) {
+          return pointsB.pointsNew - pointsA.pointsNew;
+        }
+        return pointsB.pointsOld - pointsA.pointsOld || a.displayName.localeCompare(b.displayName);
+      } else {
+        if (pointsB.pointsOld !== pointsA.pointsOld) {
+          return pointsB.pointsOld - pointsA.pointsOld;
+        }
+        return pointsB.pointsNew - pointsA.pointsNew || a.displayName.localeCompare(b.displayName);
+      }
+    });
+  }, [leaderboard, leaderboardPhase, calculatedPoints]);
 
   // Unique list of rounds for filtering
   const rounds = ["Todos", "Matchday 1", "Matchday 2", "Matchday 3", "Matchday 4", "Matchday 5", "Matchday 6", "Matchday 7", "Matchday 8", "Matchday 9", "Matchday 10", "Matchday 11", "Matchday 12", "Matchday 13", "Matchday 14", "Matchday 15", "Matchday 16", "Matchday 17", "Round of 32", "Round of 16", "Quarter-final", "Semi-final", "Match for third place", "Final"];
@@ -810,7 +964,14 @@ export default function Home() {
             <div className="flex items-center space-x-2">
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-full px-4 py-1.5 flex items-center space-x-1.5">
                 <span className="text-amber-400 font-bold">⭐</span>
-                <span className="font-extrabold text-emerald-400 text-sm">{profile?.points ?? 0} Pts</span>
+                <span className="font-extrabold text-emerald-400 text-sm">
+                  {calculatedPoints[user.uid]?.pointsNew ?? 0} Pts
+                  {calculatedPoints[user.uid] && calculatedPoints[user.uid].pointsOld > 0 && (
+                    <span className="text-[10px] text-slate-400 ml-1.5 font-normal">
+                      (Ant: {calculatedPoints[user.uid].pointsOld})
+                    </span>
+                  )}
+                </span>
               </div>
 
               {user && financialStats.stats[user.uid] && (
@@ -1116,10 +1277,42 @@ export default function Home() {
                     <h2 className="text-xl font-extrabold text-slate-200">Tabla de Clasificación</h2>
                     <p className="text-slate-400 text-xs mt-1">Conoce a los mejores pronosticadores de la copa</p>
                     
-                    {financialStats.currentRollover > 0 && (
-                      <div className="mt-4 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs px-4 py-3 rounded-xl flex items-center justify-between">
-                        <span>💰 <strong>Bolsa Acumulada:</strong> Nadie acertó el marcador exacto en el último partido. El pozo acumulado para el próximo partido es de <strong>${financialStats.currentRollover} COP</strong>.</span>
-                      </div>
+                    {/* Selectora de Fase */}
+                    <div className="flex bg-slate-950/60 p-1 rounded-xl border border-slate-900 max-w-md mt-5">
+                      <button
+                        onClick={() => setLeaderboardPhase("new")}
+                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                          leaderboardPhase === "new"
+                            ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md"
+                            : "text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        Fase Nueva (Desde Jun 13)
+                      </button>
+                      <button
+                        onClick={() => setLeaderboardPhase("old")}
+                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                          leaderboardPhase === "old"
+                            ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md"
+                            : "text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        Fase Anterior (Hasta Jun 12)
+                      </button>
+                    </div>
+                    
+                    {leaderboardPhase === "new" ? (
+                      financialStats.rolloverNew > 0 && (
+                        <div className="mt-4 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs px-4 py-3 rounded-xl flex items-center justify-between">
+                          <span>💰 <strong>Bolsa Acumulada (Fase Nueva):</strong> Nadie acertó el marcador exacto en el último partido. El pozo acumulado para el próximo partido es de <strong>${financialStats.rolloverNew} COP</strong>.</span>
+                        </div>
+                      )
+                    ) : (
+                      financialStats.rolloverOld > 0 && (
+                        <div className="mt-4 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs px-4 py-3 rounded-xl flex items-center justify-between">
+                          <span>💰 <strong>Bolsa Acumulada (Fase Anterior):</strong> El pozo acumulado final de la fase anterior fue de <strong>${financialStats.rolloverOld} COP</strong>.</span>
+                        </div>
+                      )
                     )}
 
                     <div className="mt-6 overflow-x-auto rounded-xl border border-slate-950 bg-slate-950/20">
@@ -1135,9 +1328,15 @@ export default function Home() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-950">
-                          {leaderboard.map((userProf, index) => {
+                          {sortedLeaderboard.map((userProf, index) => {
                             const isMe = userProf.uid === user.uid;
-                            const userStats = financialStats.stats[userProf.uid] || { invested: 0, winnings: 0, balance: 0, predictionsCount: 0 };
+                            const userStats = leaderboardPhase === "new" 
+                              ? (financialStats.statsNew[userProf.uid] || { invested: 0, winnings: 0, balance: 0, predictionsCount: 0 })
+                              : (financialStats.statsOld[userProf.uid] || { invested: 0, winnings: 0, balance: 0, predictionsCount: 0 });
+                            const userCalc = calculatedPoints[userProf.uid] || { pointsOld: 0, pointsNew: 0 };
+                            const pts = leaderboardPhase === "new"
+                              ? userCalc.pointsNew
+                              : userCalc.pointsOld;
                             return (
                               <tr 
                                 key={userProf.uid} 
@@ -1161,13 +1360,55 @@ export default function Home() {
                                   ${userStats.winnings.toFixed(0)}
                                 </td>
                                 <td className="py-3 sm:py-4 px-3 sm:px-6 text-right font-extrabold text-emerald-400">
-                                  {userProf.points}
+                                  {pts}
                                 </td>
                               </tr>
                             );
                           })}
                         </tbody>
                       </table>
+                    </div>
+
+                    {/* Scoring System Information */}
+                    <div className="mt-8 pt-6 border-t border-slate-900">
+                      <h3 className="text-base font-bold text-slate-200 flex items-center space-x-2">
+                        <span>🎯</span>
+                        <span>Sistema de Puntuación (Partidos de hoy en adelante)</span>
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1">Cómo se calculan los puntos de cada partido a partir de hoy (13 de junio):</p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                        <div className="flex items-start space-x-3 p-5 rounded-xl bg-slate-950/20 hover:bg-slate-950/40 transition-colors border border-slate-900">
+                          <span className="text-sm font-bold px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">+5 Pts</span>
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-300">Marcador Exacto</h4>
+                            <p className="text-xs text-slate-500 mt-0.5">Le atinas al resultado idéntico del partido.</p>
+                            <span className="text-[11px] text-emerald-500/80 block mt-1">E.g., Pred: 2-1 | Real: 2-1</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-3 p-5 rounded-xl bg-slate-950/20 hover:bg-slate-950/40 transition-colors border border-slate-900">
+                          <span className="text-sm font-bold px-2.5 py-0.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">+3 Pts</span>
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-300">Ganador y Diferencia</h4>
+                            <p className="text-xs text-slate-500 mt-0.5">Aciertas qué equipo gana y por cuántos goles de diferencia (solo para ganadores, no empates).</p>
+                            <span className="text-[11px] text-amber-500/80 block mt-1">E.g., Pred: 3-1 | Real: 2-0 (Ambos dif +2)</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-3 p-5 rounded-xl bg-slate-950/20 hover:bg-slate-950/40 transition-colors border border-slate-900">
+                          <span className="text-sm font-bold px-2.5 py-0.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">+1 Pt</span>
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-300">Resultado Simple</h4>
+                            <p className="text-xs text-slate-500 mt-0.5">Aciertas quién gana con otra diferencia, o aciertas empate no exacto.</p>
+                            <span className="text-[11px] text-blue-500/80 block mt-1">E.g., Pred: 2-1 | Real: 1-0 o Pred: 1-1 | Real: 2-2</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <p className="text-[11px] text-slate-500 mt-4 italic">
+                        * Nota: Los partidos anteriores a hoy mantienen la liquidación acumulada original (+1 por acierto exacto). Los puntos de ambas fases se muestran por separado en la tabla superior.
+                      </p>
                     </div>
                   </div>
                 </div>
