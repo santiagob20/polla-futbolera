@@ -789,8 +789,8 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-slate-950 text-white p-6">
-        <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="flex-1 flex flex-col items-center justify-center bg-[#020804] text-white p-6">
+        <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
         <p className="mt-4 text-slate-400 font-medium animate-pulse">Cargando polla mundialista...</p>
       </div>
     );
@@ -799,14 +799,14 @@ export default function Home() {
   // Not logged in: Show auth screen
   if (!user) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#041a0d] via-[#020804] to-black">
         <div className="w-full max-w-md bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl shadow-2xl p-8 transition-all duration-300">
           <div className="text-center mb-8">
             <span className="text-5xl mb-2 block animate-bounce">🏆</span>
-            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 via-teal-300 to-amber-300 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-amber-400 via-yellow-300 to-sky-400 bg-clip-text text-transparent">
               Polla Mundial 2026
             </h1>
-            <p className="text-emerald-450 font-extrabold text-xs tracking-wider mt-1.5 uppercase text-emerald-400">
+            <p className="text-amber-400 font-extrabold text-xs tracking-wider mt-1.5 uppercase">
               Familia Güiza • Ardila • Franco y otros jajaja
             </p>
             <p className="text-slate-400 text-sm mt-2">
@@ -840,7 +840,7 @@ export default function Home() {
                       }}
                       className="flex-1 text-left flex flex-col"
                     >
-                      <span className="font-bold text-xs text-slate-200 group-hover:text-emerald-400 transition-colors">
+                      <span className="font-bold text-xs text-slate-200 group-hover:text-amber-400 transition-colors">
                         {acc.name}
                       </span>
                       <span className="text-[10px] text-slate-400 truncate max-w-[200px]">
@@ -871,7 +871,7 @@ export default function Home() {
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Ej. Santiago Barrera"
                   required
-                  className="w-full px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-slate-100 transition-colors"
+                  className="w-full px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-xl focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-slate-100 transition-colors"
                 />
               </div>
             )}
@@ -884,7 +884,7 @@ export default function Home() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="usuario@correo.com"
                 required
-                className="w-full px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-slate-100 transition-colors"
+                className="w-full px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-xl focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-slate-100 transition-colors"
               />
             </div>
 
@@ -896,7 +896,7 @@ export default function Home() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="******"
                 required
-                className="w-full px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-slate-100 transition-colors"
+                className="w-full px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-xl focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-slate-100 transition-colors"
               />
             </div>
 
@@ -909,7 +909,7 @@ export default function Home() {
             <button
               type="submit"
               disabled={authLoading}
-              className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold rounded-xl shadow-lg hover:shadow-emerald-500/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center disabled:opacity-50"
+              className="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-450 text-slate-950 font-bold rounded-xl shadow-lg hover:shadow-amber-500/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center disabled:opacity-50"
             >
               {authLoading ? (
                 <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
@@ -927,7 +927,7 @@ export default function Home() {
                 setIsRegistering(!isRegistering);
                 setAuthError("");
               }}
-              className="text-emerald-400 hover:text-emerald-300 text-sm font-medium transition-colors"
+              className="text-amber-400 hover:text-amber-300 text-sm font-medium transition-colors"
             >
               {isRegistering ? "¿Ya tienes cuenta? Inicia Sesión" : "¿No tienes cuenta? Regístrate aquí"}
             </button>
@@ -939,17 +939,17 @@ export default function Home() {
 
   // Logged in user dashboard
   return (
-    <div className="flex-1 flex flex-col bg-slate-950 min-h-screen overflow-x-hidden">
+    <div className="flex-1 flex flex-col bg-gradient-to-b from-[#020804] via-[#010603] to-black min-h-screen overflow-x-hidden">
       {/* Header */}
       <header className="bg-slate-900/40 backdrop-blur-md border-b border-slate-900 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <span className="text-2xl">🏆</span>
             <div className="hidden sm:flex flex-col">
-              <span className="font-extrabold text-base sm:text-lg bg-gradient-to-r from-emerald-400 to-amber-300 bg-clip-text text-transparent leading-none">
+              <span className="font-extrabold text-base sm:text-lg bg-gradient-to-r from-amber-400 via-yellow-300 to-sky-400 bg-clip-text text-transparent leading-none">
                 Polla Mundial 2026
               </span>
-              <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider mt-0.5 leading-none">
+              <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider mt-0.5 leading-none">
                 Güiza • Ardila • Franco y otros jajaja
               </span>
             </div>
@@ -962,9 +962,9 @@ export default function Home() {
             </div>
             
             <div className="flex items-center space-x-2">
-              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-full px-4 py-1.5 flex items-center space-x-1.5">
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-full px-4 py-1.5 flex items-center space-x-1.5">
                 <span className="text-amber-400 font-bold">⭐</span>
-                <span className="font-extrabold text-emerald-400 text-sm">
+                <span className="font-extrabold text-amber-400 text-sm">
                   {calculatedPoints[user.uid]?.pointsNew ?? 0} Pts
                   {calculatedPoints[user.uid] && calculatedPoints[user.uid].pointsOld > 0 && (
                     <span className="text-[10px] text-slate-400 ml-1.5 font-normal">
@@ -978,7 +978,7 @@ export default function Home() {
                 <div className="hidden md:flex items-center space-x-3 bg-slate-900/60 border border-slate-800 rounded-full px-4 py-1.5 text-[11px] text-slate-350">
                   <span>Debe aportar: <strong className="text-slate-200">${financialStats.stats[user.uid].invested} COP</strong></span>
                   <span className="text-slate-700">|</span>
-                  <span>Premios Ganados: <strong className="text-emerald-400">${financialStats.stats[user.uid].winnings.toFixed(0)} COP</strong></span>
+                  <span>Premios Ganados: <strong className="text-amber-400">${financialStats.stats[user.uid].winnings.toFixed(0)} COP</strong></span>
                 </div>
               )}
             </div>
@@ -1026,7 +1026,7 @@ export default function Home() {
             onClick={() => setActiveTab("matches")}
             className={`flex-1 lg:flex-none lg:w-full px-4 py-3 rounded-xl font-bold text-sm text-center lg:text-left flex items-center justify-center lg:justify-start space-x-2.5 transition-all shrink-0 ${
               activeTab === "matches" 
-                ? "bg-gradient-to-r from-emerald-500/20 to-teal-500/10 border-b-2 lg:border-b-0 lg:border-l-4 border-emerald-500 text-emerald-400" 
+                ? "bg-gradient-to-r from-amber-500/20 to-indigo-500/5 border-b-2 lg:border-b-0 lg:border-l-4 border-amber-500 text-amber-400" 
                 : "bg-slate-900/40 hover:bg-slate-900/80 text-slate-400 hover:text-slate-200 border-b-2 border-transparent lg:border-b-0"
             }`}
           >
@@ -1038,7 +1038,7 @@ export default function Home() {
             onClick={() => setActiveTab("leaderboard")}
             className={`flex-1 lg:flex-none lg:w-full px-4 py-3 rounded-xl font-bold text-sm text-center lg:text-left flex items-center justify-center lg:justify-start space-x-2.5 transition-all shrink-0 ${
               activeTab === "leaderboard" 
-                ? "bg-gradient-to-r from-emerald-500/20 to-teal-500/10 border-b-2 lg:border-b-0 lg:border-l-4 border-emerald-500 text-emerald-400" 
+                ? "bg-gradient-to-r from-sky-500/20 to-indigo-500/5 border-b-2 lg:border-b-0 lg:border-l-4 border-sky-500 text-sky-400" 
                 : "bg-slate-900/40 hover:bg-slate-900/80 text-slate-400 hover:text-slate-200 border-b-2 border-transparent lg:border-b-0"
             }`}
           >
@@ -1065,7 +1065,7 @@ export default function Home() {
         <section className="flex-1">
           {dataLoading ? (
             <div className="h-64 flex flex-col items-center justify-center bg-slate-900/20 rounded-2xl border border-slate-900">
-              <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-10 h-10 border-3 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
               <p className="mt-3 text-slate-500 text-sm animate-pulse">Obteniendo datos de Firebase...</p>
             </div>
           ) : (
@@ -1086,7 +1086,7 @@ export default function Home() {
                           onClick={() => setHidePastMatches(!hidePastMatches)}
                           className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 shrink-0 ${
                             !hidePastMatches
-                              ? "bg-emerald-950/30 text-emerald-400 border-emerald-900/40 hover:bg-emerald-900/20"
+                              ? "bg-amber-950/30 text-amber-400 border-amber-900/40 hover:bg-amber-900/20"
                               : "bg-slate-900/60 text-slate-300 border-slate-800 hover:bg-slate-800"
                           }`}
                         >
@@ -1097,7 +1097,7 @@ export default function Home() {
                       <select
                         value={selectedRound}
                         onChange={(e) => setSelectedRound(e.target.value)}
-                        className="px-3.5 py-1.5 bg-slate-950 border border-slate-800 text-slate-350 text-xs rounded-xl focus:outline-none focus:border-emerald-500 w-full sm:w-auto"
+                        className="px-3.5 py-1.5 bg-slate-950 border border-slate-800 text-slate-350 text-xs rounded-xl focus:outline-none focus:border-amber-500 w-full sm:w-auto"
                       >
                         {rounds.map((round) => (
                           <option key={round} value={round}>{formatRoundName(round)}</option>
@@ -1115,7 +1115,7 @@ export default function Home() {
                             <p className="text-slate-400 text-sm mb-3">Todos los partidos de esta ronda ya pasaron.</p>
                             <button
                               onClick={() => setHidePastMatches(false)}
-                              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-extrabold rounded-xl transition-colors shadow-lg shadow-emerald-500/20"
+                              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-extrabold rounded-xl transition-colors shadow-lg shadow-amber-500/20"
                             >
                               Ver partidos pasados
                             </button>
@@ -1130,7 +1130,7 @@ export default function Home() {
                           {/* Day Header */}
                           <div className="col-span-full mt-6 first:mt-0 mb-2">
                             <div className="flex items-center space-x-3">
-                              <span className="text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider bg-slate-900/80 px-3 py-1.5 rounded-xl border border-slate-800/80 shadow-sm">
+                              <span className="text-[11px] font-extrabold text-amber-400 uppercase tracking-wider bg-slate-900/80 px-3 py-1.5 rounded-xl border border-slate-800/80 shadow-sm">
                                 {group.dateLabel}
                               </span>
                               <div className="h-px bg-slate-900 flex-1"></div>
@@ -1159,7 +1159,7 @@ export default function Home() {
                               >
                                 {/* Match Header */}
                                 <div className="flex justify-between items-center text-xs text-slate-400 border-b border-slate-950/60 pb-3 mb-4">
-                                  <span className="font-bold text-emerald-500">{formatRoundName(match.round)} {match.group ? `• ${match.group}` : ""}</span>
+                                  <span className="font-bold text-amber-500">{formatRoundName(match.round)} {match.group ? `• ${match.group}` : ""}</span>
                                   <span className="font-semibold text-slate-300">{localTimeStr} {tzAbbr}</span>
                                 </div>
 
@@ -1194,7 +1194,7 @@ export default function Home() {
                                           [match.id]: { ...draft, goals1: val }
                                         }));
                                       }}
-                                      className="w-12 h-12 text-center bg-slate-950 border border-slate-800 focus:border-emerald-500 text-lg font-extrabold rounded-xl focus:outline-none disabled:opacity-60 disabled:bg-slate-900/30 text-emerald-400"
+                                      className="w-12 h-12 text-center bg-slate-950 border border-slate-800 focus:border-amber-500 text-lg font-extrabold rounded-xl focus:outline-none disabled:opacity-60 disabled:bg-slate-900/30 text-amber-400"
                                       placeholder="-"
                                     />
                                     <span className="text-slate-655 font-bold">vs</span>
@@ -1211,7 +1211,7 @@ export default function Home() {
                                           [match.id]: { ...draft, goals2: val }
                                         }));
                                       }}
-                                      className="w-12 h-12 text-center bg-slate-950 border border-slate-800 focus:border-emerald-500 text-lg font-extrabold rounded-xl focus:outline-none disabled:opacity-60 disabled:bg-slate-900/30 text-emerald-400"
+                                      className="w-12 h-12 text-center bg-slate-950 border border-slate-800 focus:border-amber-500 text-lg font-extrabold rounded-xl focus:outline-none disabled:opacity-60 disabled:bg-slate-900/30 text-amber-400"
                                       placeholder="-"
                                     />
                                   </div>
@@ -1232,19 +1232,19 @@ export default function Home() {
                                 </div>
 
                                 {/* Match Footer */}
-                                <div className="mt-4 pt-3 border-t border-slate-950/60 flex items-center justify-between">
-                                  <span className="text-[10px] text-slate-500 truncate max-w-[150px]">
+                                <div className="mt-4 pt-3 border-t border-slate-950/60 flex items-center justify-between gap-2">
+                                  <span className="text-[10px] text-slate-500 truncate min-w-0 flex-1 mr-2" title={match.ground}>
                                     {match.ground}
                                   </span>
 
                                   {hasResult ? (
-                                    <div className="flex items-center space-x-2">
-                                      <span className="text-xs bg-slate-950 border border-slate-800 text-slate-400 px-2.5 py-1 rounded-lg">
+                                    <div className="flex items-center space-x-2 shrink-0">
+                                      <span className="text-xs bg-slate-950 border border-slate-800 text-slate-400 px-2.5 py-1 rounded-lg whitespace-nowrap">
                                         {match.result?.isFinal === false ? "En Vivo: " : "Final: "}{match.result?.goals1} - {match.result?.goals2}
                                       </span>
-                                      <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
+                                      <span className={`text-xs font-bold px-2 py-1 rounded-lg whitespace-nowrap ${
                                         (pred?.points ?? 0) === 1 
-                                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                                          ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" 
                                           : "bg-slate-800 text-slate-500"
                                       }`}>
                                         +{pred?.points ?? 0} Pts {match.result?.isFinal === false ? "(Prov.)" : ""}
@@ -1254,7 +1254,7 @@ export default function Home() {
                                     <button
                                       onClick={() => savePrediction(match.id)}
                                       disabled={isSaving || draft.goals1 === "" || draft.goals2 === ""}
-                                      className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-850 disabled:text-slate-600 disabled:border-slate-800/80 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-md active:scale-[0.95]"
+                                      className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-850 disabled:text-slate-600 disabled:border-slate-800/80 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-md active:scale-[0.95]"
                                     >
                                       {isSaving ? "Guardando..." : pred ? "Actualizar" : "Guardar"}
                                     </button>
@@ -1283,7 +1283,7 @@ export default function Home() {
                         onClick={() => setLeaderboardPhase("new")}
                         className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
                           leaderboardPhase === "new"
-                            ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md"
+                            ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-md"
                             : "text-slate-400 hover:text-slate-200"
                         }`}
                       >
@@ -1293,7 +1293,7 @@ export default function Home() {
                         onClick={() => setLeaderboardPhase("old")}
                         className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
                           leaderboardPhase === "old"
-                            ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md"
+                            ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-md"
                             : "text-slate-400 hover:text-slate-200"
                         }`}
                       >
@@ -1341,14 +1341,14 @@ export default function Home() {
                               <tr 
                                 key={userProf.uid} 
                                 className={`text-xs sm:text-sm hover:bg-slate-900/20 transition-colors ${
-                                  isMe ? "bg-emerald-500/5 text-emerald-400 font-bold" : "text-slate-300"
+                                  isMe ? "bg-amber-500/5 text-amber-400 font-bold" : "text-slate-300"
                                 }`}
                               >
                                 <td className="py-3 sm:py-4 px-3 sm:px-6 text-center font-extrabold">
                                   {index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : index + 1}
                                 </td>
                                 <td className="py-3 sm:py-4 px-3 sm:px-6 truncate max-w-[120px] sm:max-w-[200px]">
-                                  {userProf.displayName} {isMe && <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded ml-2">Tú</span>}
+                                  {userProf.displayName} {isMe && <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded ml-2">Tú</span>}
                                 </td>
                                 <td className="py-3 sm:py-4 px-3 sm:px-6 text-center text-slate-400">
                                   {userStats.predictionsCount}
@@ -1356,10 +1356,10 @@ export default function Home() {
                                 <td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-slate-400">
                                   ${userStats.invested}
                                 </td>
-                                <td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-emerald-400">
+                                <td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-amber-400">
                                   ${userStats.winnings.toFixed(0)}
                                 </td>
-                                <td className="py-3 sm:py-4 px-3 sm:px-6 text-right font-extrabold text-emerald-400">
+                                <td className="py-3 sm:py-4 px-3 sm:px-6 text-right font-extrabold text-amber-400">
                                   {pts}
                                 </td>
                               </tr>
@@ -1379,11 +1379,11 @@ export default function Home() {
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                         <div className="flex items-start space-x-3 p-5 rounded-xl bg-slate-950/20 hover:bg-slate-950/40 transition-colors border border-slate-900">
-                          <span className="text-sm font-bold px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">+5 Pts</span>
+                          <span className="text-sm font-bold px-2.5 py-0.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">+5 Pts</span>
                           <div>
                             <h4 className="text-sm font-bold text-slate-300">Marcador Exacto</h4>
                             <p className="text-xs text-slate-500 mt-0.5">Le atinas al resultado idéntico del partido.</p>
-                            <span className="text-[11px] text-emerald-500/80 block mt-1">E.g., Pred: 2-1 | Real: 2-1</span>
+                            <span className="text-[11px] text-amber-500/80 block mt-1">E.g., Pred: 2-1 | Real: 2-1</span>
                           </div>
                         </div>
 
@@ -1763,7 +1763,7 @@ export default function Home() {
                                           {hasResult && pred && (
                                             <span className={`text-xs font-bold px-2 py-1.5 rounded-lg border ${
                                               pred.points === 1 
-                                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+                                                ? "bg-amber-500/10 text-amber-400 border-amber-500/20" 
                                                 : "bg-slate-800 text-slate-500 border-transparent"
                                             }`}>
                                               +{pred.points} Pts
