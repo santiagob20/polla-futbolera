@@ -2,15 +2,15 @@
 
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { 
-  collection, 
-  query, 
-  onSnapshot, 
-  orderBy, 
-  doc, 
-  setDoc, 
-  getDocs, 
-  writeBatch 
+import {
+  collection,
+  query,
+  onSnapshot,
+  orderBy,
+  doc,
+  setDoc,
+  getDocs,
+  writeBatch
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { calculatePoints, calculatePointsOld, calculatePointsNew } from "@/lib/scoreCalculator";
@@ -98,19 +98,39 @@ const capitalizeFirstLetter = (str: string) => {
   return str.charAt(0).toUpperCase() + str.slice(1);
 };
 
+const getPointsBadgeClass = (points: number, isOldMatch: boolean): string => {
+  if (isOldMatch) {
+    if (points === 1) {
+      return "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+    }
+    return "bg-slate-800 text-slate-500 border border-transparent";
+  } else {
+    switch (points) {
+      case 5:
+        return "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+      case 3:
+        return "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+      case 1:
+        return "bg-blue-500/10 text-blue-400 border border-blue-500/20";
+      default:
+        return "bg-slate-800 text-slate-500 border border-transparent";
+    }
+  }
+};
+
 export default function Home() {
-  const { 
-    user, 
-    profile, 
-    loading, 
-    savedAccounts, 
-    login, 
-    signup, 
-    logout, 
-    switchAccount, 
-    removeSavedAccount 
+  const {
+    user,
+    profile,
+    loading,
+    savedAccounts,
+    login,
+    signup,
+    logout,
+    switchAccount,
+    removeSavedAccount
   } = useAuth();
-  
+
   // Auth state inputs
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -121,10 +141,10 @@ export default function Home() {
 
   // Tabs: 'matches', 'leaderboard', 'admin'
   const [activeTab, setActiveTab] = useState<"matches" | "leaderboard" | "admin">("matches");
-  
+
   // Leaderboard Phase: 'new' (from June 13 onwards), 'old' (up to June 12)
   const [leaderboardPhase, setLeaderboardPhase] = useState<"new" | "old">("new");
-  
+
   // Data lists
   const [matches, setMatches] = useState<Match[]>([]);
   const [predictions, setPredictions] = useState<{ [matchId: string]: Prediction }>({});
@@ -222,7 +242,7 @@ export default function Home() {
       });
       setPredictions(userPreds);
       setAllPredictions(allPredsList);
-      
+
       // Initialize prediction drafts with existing values
       const drafts: { [matchId: string]: { goals1: string; goals2: string } } = {};
       allPredsList.forEach((data) => {
@@ -266,7 +286,7 @@ export default function Home() {
     const unsubAdminUserPreds = onSnapshot(qPreds, (snapshot) => {
       const userPreds: { [matchId: string]: Prediction } = {};
       const drafts: { [matchId: string]: { goals1: string; goals2: string } } = {};
-      
+
       snapshot.forEach((doc) => {
         const data = doc.data() as Prediction;
         if (data.userId === adminSelectedUserId) {
@@ -277,7 +297,7 @@ export default function Home() {
           };
         }
       });
-      
+
       setAdminUserPredictions(userPreds);
       setAdminUserDrafts(drafts);
     });
@@ -300,7 +320,7 @@ export default function Home() {
     try {
       const predId = `${adminSelectedUserId}_${matchId}`;
       const match = matches.find(m => m.id === matchId);
-      
+
       let pts = 0;
       if (match?.result) {
         pts = (match.date < "2026-06-13")
@@ -365,7 +385,7 @@ export default function Home() {
     try {
       const predId = `${user.uid}_${matchId}`;
       const match = matches.find(m => m.id === matchId);
-      
+
       let pts = 0;
       if (match?.result) {
         pts = (match.date < "2026-06-13")
@@ -409,7 +429,7 @@ export default function Home() {
       // 2. Fetch all predictions for this match
       const predSnap = await getDocs(collection(db, "predictions"));
       const batch = writeBatch(db);
-       const updatedUserIds = new Set<string>();
+      const updatedUserIds = new Set<string>();
       const match = matches.find(m => m.id === matchId);
 
       predSnap.forEach((pDoc) => {
@@ -436,7 +456,7 @@ export default function Home() {
 
       const userPointsMap: { [userId: string]: number } = {};
       const userPreviousPointsMap: { [userId: string]: number } = {};
-      
+
       allPredsSnap.forEach((pDoc) => {
         const pred = pDoc.data() as Prediction;
         const m = matchesMap[pred.matchId];
@@ -482,7 +502,7 @@ export default function Home() {
     try {
       const matchesSnap = await getDocs(collection(db, "matches"));
       const predsSnap = await getDocs(collection(db, "predictions"));
-      
+
       const matchesMap: { [id: string]: Match } = {};
       matchesSnap.forEach(doc => {
         matchesMap[doc.id] = { ...doc.data() as Match, id: doc.id };
@@ -495,7 +515,7 @@ export default function Home() {
       predsSnap.forEach(pDoc => {
         const pred = pDoc.data() as Prediction;
         const match = matchesMap[pred.matchId];
-        
+
         let pts = 0;
         if (match && match.result) {
           pts = (match.date < "2026-06-13")
@@ -542,22 +562,22 @@ export default function Home() {
   const financialStats = React.useMemo(() => {
     const sortedMatches = [...matches].sort((a, b) => a.num - b.num);
 
-    const statsOld: { 
-      [userId: string]: { 
-        invested: number; 
-        winnings: number; 
-        balance: number; 
+    const statsOld: {
+      [userId: string]: {
+        invested: number;
+        winnings: number;
+        balance: number;
         predictionsCount: number;
-      } 
+      }
     } = {};
 
-    const statsNew: { 
-      [userId: string]: { 
-        invested: number; 
-        winnings: number; 
-        balance: number; 
+    const statsNew: {
+      [userId: string]: {
+        invested: number;
+        winnings: number;
+        balance: number;
         predictionsCount: number;
-      } 
+      }
     } = {};
 
     // Ensure all users in leaderboard are initialized
@@ -588,7 +608,7 @@ export default function Home() {
 
       if (isOld) {
         const totalPoolForMatch = (matchPreds.length * 500) + rolloverOld;
-        const winners = matchPreds.filter(pred => 
+        const winners = matchPreds.filter(pred =>
           pred.goals1 === match.result!.goals1 && pred.goals2 === match.result!.goals2
         );
         if (winners.length > 0) {
@@ -602,7 +622,7 @@ export default function Home() {
         }
       } else {
         const totalPoolForMatch = (matchPreds.length * 500) + rolloverNew;
-        const winners = matchPreds.filter(pred => 
+        const winners = matchPreds.filter(pred =>
           pred.goals1 === match.result!.goals1 && pred.goals2 === match.result!.goals2
         );
         if (winners.length > 0) {
@@ -624,10 +644,10 @@ export default function Home() {
       statsNew[uid].balance = statsNew[uid].winnings - statsNew[uid].invested;
     });
 
-    return { 
-      statsOld, 
-      statsNew, 
-      rolloverOld, 
+    return {
+      statsOld,
+      statsNew,
+      rolloverOld,
       rolloverNew,
       // Fallbacks for header compatibility
       stats: statsNew,
@@ -637,11 +657,11 @@ export default function Home() {
 
   // Calculate points dynamically in real-time to guarantee correctness and avoid database mismatches
   const calculatedPoints = React.useMemo(() => {
-    const pointsMap: { 
-      [userId: string]: { 
-        pointsOld: number; 
-        pointsNew: number; 
-      } 
+    const pointsMap: {
+      [userId: string]: {
+        pointsOld: number;
+        pointsNew: number;
+      }
     } = {};
 
     // Initialize all users in leaderboard
@@ -700,8 +720,8 @@ export default function Home() {
   // Unique list of rounds for filtering
   const rounds = ["Todos", "Matchday 1", "Matchday 2", "Matchday 3", "Matchday 4", "Matchday 5", "Matchday 6", "Matchday 7", "Matchday 8", "Matchday 9", "Matchday 10", "Matchday 11", "Matchday 12", "Matchday 13", "Matchday 14", "Matchday 15", "Matchday 16", "Matchday 17", "Round of 32", "Round of 16", "Quarter-final", "Semi-final", "Match for third place", "Final"];
 
-  const filteredMatches = selectedRound === "Todos" 
-    ? matches 
+  const filteredMatches = selectedRound === "Todos"
+    ? matches
     : matches.filter(m => m.round === selectedRound);
 
   const pastMatchesCount = React.useMemo(() => {
@@ -821,8 +841,8 @@ export default function Home() {
               </span>
               <div className="space-y-2">
                 {savedAccounts.map((acc) => (
-                  <div 
-                    key={acc.email} 
+                  <div
+                    key={acc.email}
                     className="flex items-center justify-between p-2.5 bg-slate-950/40 hover:bg-slate-950/80 border border-slate-850 rounded-xl transition-all group"
                   >
                     <button
@@ -960,7 +980,7 @@ export default function Home() {
               <span className="text-xs text-slate-400">Jugador</span>
               <span className="font-semibold text-slate-200">{profile?.displayName}</span>
             </div>
-            
+
             <div className="flex items-center space-x-2">
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-full px-4 py-1.5 flex items-center space-x-1.5">
                 <span className="text-amber-400 font-bold">⭐</span>
@@ -1019,16 +1039,15 @@ export default function Home() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col lg:flex-row gap-6">
-        
+
         {/* Navigation Sidebar / Tabs */}
         <section className="w-full lg:w-64 flex flex-row lg:flex-col gap-2 pb-2 lg:pb-0 shrink-0 lg:h-fit">
           <button
             onClick={() => setActiveTab("matches")}
-            className={`flex-1 lg:flex-none lg:w-full px-4 py-3 rounded-xl font-bold text-sm text-center lg:text-left flex items-center justify-center lg:justify-start space-x-2.5 transition-all shrink-0 ${
-              activeTab === "matches" 
-                ? "bg-gradient-to-r from-amber-500/20 to-indigo-500/5 border-b-2 lg:border-b-0 lg:border-l-4 border-amber-500 text-amber-400" 
+            className={`flex-1 lg:flex-none lg:w-full px-4 py-3 rounded-xl font-bold text-sm text-center lg:text-left flex items-center justify-center lg:justify-start space-x-2.5 transition-all shrink-0 ${activeTab === "matches"
+                ? "bg-gradient-to-r from-amber-500/20 to-indigo-500/5 border-b-2 lg:border-b-0 lg:border-l-4 border-amber-500 text-amber-400"
                 : "bg-slate-900/40 hover:bg-slate-900/80 text-slate-400 hover:text-slate-200 border-b-2 border-transparent lg:border-b-0"
-            }`}
+              }`}
           >
             <span>📅</span>
             <span>Pronósticos</span>
@@ -1036,11 +1055,10 @@ export default function Home() {
 
           <button
             onClick={() => setActiveTab("leaderboard")}
-            className={`flex-1 lg:flex-none lg:w-full px-4 py-3 rounded-xl font-bold text-sm text-center lg:text-left flex items-center justify-center lg:justify-start space-x-2.5 transition-all shrink-0 ${
-              activeTab === "leaderboard" 
-                ? "bg-gradient-to-r from-sky-500/20 to-indigo-500/5 border-b-2 lg:border-b-0 lg:border-l-4 border-sky-500 text-sky-400" 
+            className={`flex-1 lg:flex-none lg:w-full px-4 py-3 rounded-xl font-bold text-sm text-center lg:text-left flex items-center justify-center lg:justify-start space-x-2.5 transition-all shrink-0 ${activeTab === "leaderboard"
+                ? "bg-gradient-to-r from-sky-500/20 to-indigo-500/5 border-b-2 lg:border-b-0 lg:border-l-4 border-sky-500 text-sky-400"
                 : "bg-slate-900/40 hover:bg-slate-900/80 text-slate-400 hover:text-slate-200 border-b-2 border-transparent lg:border-b-0"
-            }`}
+              }`}
           >
             <span>🏆</span>
             <span>Posiciones</span>
@@ -1049,11 +1067,10 @@ export default function Home() {
           {profile?.isAdmin && (
             <button
               onClick={() => setActiveTab("admin")}
-              className={`flex-1 lg:flex-none lg:w-full px-4 py-3 rounded-xl font-bold text-sm text-center lg:text-left flex items-center justify-center lg:justify-start space-x-2.5 transition-all shrink-0 ${
-                activeTab === "admin" 
-                  ? "bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border-b-2 lg:border-b-0 lg:border-l-4 border-amber-500 text-amber-400" 
+              className={`flex-1 lg:flex-none lg:w-full px-4 py-3 rounded-xl font-bold text-sm text-center lg:text-left flex items-center justify-center lg:justify-start space-x-2.5 transition-all shrink-0 ${activeTab === "admin"
+                  ? "bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border-b-2 lg:border-b-0 lg:border-l-4 border-amber-500 text-amber-400"
                   : "bg-slate-900/40 hover:bg-slate-900/80 text-slate-400 hover:text-slate-200 border-b-2 border-transparent lg:border-b-0"
-              }`}
+                }`}
             >
               <span>⚙️</span>
               <span>Administrar</span>
@@ -1084,11 +1101,10 @@ export default function Home() {
                       {pastMatchesCount > 0 && (
                         <button
                           onClick={() => setHidePastMatches(!hidePastMatches)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 shrink-0 ${
-                            !hidePastMatches
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 shrink-0 ${!hidePastMatches
                               ? "bg-amber-950/30 text-amber-400 border-amber-900/40 hover:bg-amber-900/20"
                               : "bg-slate-900/60 text-slate-300 border-slate-800 hover:bg-slate-800"
-                          }`}
+                            }`}
                         >
                           👁️ Pasados {pastMatchesCount > 0 && `(${pastMatchesCount})`}
                         </button>
@@ -1153,7 +1169,7 @@ export default function Home() {
                             const tzAbbr = getTzAbbreviation();
 
                             return (
-                              <div 
+                              <div
                                 key={match.id}
                                 className="bg-slate-900/40 hover:bg-slate-900/60 transition-all border border-slate-900/80 hover:border-slate-800 rounded-2xl p-5 flex flex-col justify-between"
                               >
@@ -1168,9 +1184,9 @@ export default function Home() {
                                   {/* Team 1 */}
                                   <div className="flex-1 flex flex-col items-center justify-center space-y-1.5 min-w-0">
                                     {getFlagUrl(match.team1) && (
-                                      <img 
-                                        src={getFlagUrl(match.team1)!} 
-                                        alt={match.team1} 
+                                      <img
+                                        src={getFlagUrl(match.team1)!}
+                                        alt={match.team1}
                                         className="w-8 h-5.5 object-cover rounded-sm shadow-md border border-slate-900 shrink-0"
                                       />
                                     )}
@@ -1219,9 +1235,9 @@ export default function Home() {
                                   {/* Team 2 */}
                                   <div className="flex-1 flex flex-col items-center justify-center space-y-1.5 min-w-0">
                                     {getFlagUrl(match.team2) && (
-                                      <img 
-                                        src={getFlagUrl(match.team2)!} 
-                                        alt={match.team2} 
+                                      <img
+                                        src={getFlagUrl(match.team2)!}
+                                        alt={match.team2}
                                         className="w-8 h-5.5 object-cover rounded-sm shadow-md border border-slate-900 shrink-0"
                                       />
                                     )}
@@ -1242,11 +1258,7 @@ export default function Home() {
                                       <span className="text-xs bg-slate-950 border border-slate-800 text-slate-400 px-2.5 py-1 rounded-lg whitespace-nowrap">
                                         {match.result?.isFinal === false ? "En Vivo: " : "Final: "}{match.result?.goals1} - {match.result?.goals2}
                                       </span>
-                                      <span className={`text-xs font-bold px-2 py-1 rounded-lg whitespace-nowrap ${
-                                        (pred?.points ?? 0) === 1 
-                                          ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" 
-                                          : "bg-slate-800 text-slate-500"
-                                      }`}>
+                                      <span className={`text-xs font-bold px-2 py-1 rounded-lg whitespace-nowrap ${getPointsBadgeClass(pred?.points ?? 0, match.date < "2026-06-13")}`}>
                                         +{pred?.points ?? 0} Pts {match.result?.isFinal === false ? "(Prov.)" : ""}
                                       </span>
                                     </div>
@@ -1276,31 +1288,29 @@ export default function Home() {
                   <div className="bg-slate-900/40 border border-slate-900 rounded-2xl p-6">
                     <h2 className="text-xl font-extrabold text-slate-200">Tabla de Clasificación</h2>
                     <p className="text-slate-400 text-xs mt-1">Conoce a los mejores pronosticadores de la copa</p>
-                    
+
                     {/* Selectora de Fase */}
                     <div className="flex bg-slate-950/60 p-1 rounded-xl border border-slate-900 max-w-md mt-5">
                       <button
                         onClick={() => setLeaderboardPhase("new")}
-                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                          leaderboardPhase === "new"
+                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${leaderboardPhase === "new"
                             ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-md"
                             : "text-slate-400 hover:text-slate-200"
-                        }`}
+                          }`}
                       >
                         Fase Nueva (Desde Jun 13)
                       </button>
                       <button
                         onClick={() => setLeaderboardPhase("old")}
-                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                          leaderboardPhase === "old"
+                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${leaderboardPhase === "old"
                             ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-md"
                             : "text-slate-400 hover:text-slate-200"
-                        }`}
+                          }`}
                       >
                         Fase Anterior (Hasta Jun 12)
                       </button>
                     </div>
-                    
+
                     {leaderboardPhase === "new" ? (
                       financialStats.rolloverNew > 0 && (
                         <div className="mt-4 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs px-4 py-3 rounded-xl flex items-center justify-between">
@@ -1330,7 +1340,7 @@ export default function Home() {
                         <tbody className="divide-y divide-slate-950">
                           {sortedLeaderboard.map((userProf, index) => {
                             const isMe = userProf.uid === user.uid;
-                            const userStats = leaderboardPhase === "new" 
+                            const userStats = leaderboardPhase === "new"
                               ? (financialStats.statsNew[userProf.uid] || { invested: 0, winnings: 0, balance: 0, predictionsCount: 0 })
                               : (financialStats.statsOld[userProf.uid] || { invested: 0, winnings: 0, balance: 0, predictionsCount: 0 });
                             const userCalc = calculatedPoints[userProf.uid] || { pointsOld: 0, pointsNew: 0 };
@@ -1338,11 +1348,10 @@ export default function Home() {
                               ? userCalc.pointsNew
                               : userCalc.pointsOld;
                             return (
-                              <tr 
-                                key={userProf.uid} 
-                                className={`text-xs sm:text-sm hover:bg-slate-900/20 transition-colors ${
-                                  isMe ? "bg-amber-500/5 text-amber-400 font-bold" : "text-slate-300"
-                                }`}
+                              <tr
+                                key={userProf.uid}
+                                className={`text-xs sm:text-sm hover:bg-slate-900/20 transition-colors ${isMe ? "bg-amber-500/5 text-amber-400 font-bold" : "text-slate-300"
+                                  }`}
                               >
                                 <td className="py-3 sm:py-4 px-3 sm:px-6 text-center font-extrabold">
                                   {index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : index + 1}
@@ -1388,11 +1397,11 @@ export default function Home() {
                         </div>
 
                         <div className="flex items-start space-x-3 p-5 rounded-xl bg-slate-950/20 hover:bg-slate-950/40 transition-colors border border-slate-900">
-                          <span className="text-sm font-bold px-2.5 py-0.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">+3 Pts</span>
+                          <span className="text-sm font-bold px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">+3 Pts</span>
                           <div>
                             <h4 className="text-sm font-bold text-slate-300">Ganador y Diferencia</h4>
                             <p className="text-xs text-slate-500 mt-0.5">Aciertas qué equipo gana y por cuántos goles de diferencia (solo para ganadores, no empates).</p>
-                            <span className="text-[11px] text-amber-500/80 block mt-1">E.g., Pred: 3-1 | Real: 2-0 (Ambos dif +2)</span>
+                            <span className="text-[11px] text-emerald-500/80 block mt-1">E.g., Pred: 3-1 | Real: 2-0 (Ambos dif +2)</span>
                           </div>
                         </div>
 
@@ -1405,7 +1414,7 @@ export default function Home() {
                           </div>
                         </div>
                       </div>
-                      
+
                       <p className="text-[11px] text-slate-500 mt-4 italic">
                         * Nota: Los partidos anteriores a hoy mantienen la liquidación acumulada original (+1 por acierto exacto). Los puntos de ambas fases se muestran por separado en la tabla superior.
                       </p>
@@ -1434,26 +1443,24 @@ export default function Home() {
                         {adminRecalculating ? "Recalculando..." : "🔄 Recalcular Todos los Puntos"}
                       </button>
                     </div>
-                    
+
                     {/* Sub-Tabs Navigation */}
                     <div className="flex space-x-2 mt-4 border-t border-slate-900 pt-4">
                       <button
                         onClick={() => setAdminSubTab("results")}
-                        className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all border ${
-                          adminSubTab === "results"
+                        className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all border ${adminSubTab === "results"
                             ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
                             : "bg-slate-950/40 border-slate-900 text-slate-400 hover:text-slate-200"
-                        }`}
+                          }`}
                       >
                         ⚽ Resultados del Mundial
                       </button>
                       <button
                         onClick={() => setAdminSubTab("predictions")}
-                        className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all border ${
-                          adminSubTab === "predictions"
+                        className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all border ${adminSubTab === "predictions"
                             ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
                             : "bg-slate-950/40 border-slate-900 text-slate-400 hover:text-slate-200"
-                        }`}
+                          }`}
                       >
                         👤 Pronósticos de Jugadores
                       </button>
@@ -1502,7 +1509,7 @@ export default function Home() {
                                 {group.matches.map((match) => {
                                   const draft = adminResults[match.id] || { goals1: "", goals2: "" };
                                   const isSaving = adminSaving[match.id];
-                                  
+
                                   const matchDate = getMatchDate(match);
                                   const localTimeStr = matchDate.toLocaleTimeString(undefined, {
                                     hour: '2-digit',
@@ -1512,7 +1519,7 @@ export default function Home() {
                                   const tzAbbr = getTzAbbreviation();
 
                                   return (
-                                    <div 
+                                    <div
                                       key={match.id}
                                       className="bg-slate-900/40 border border-slate-900/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
                                     >
@@ -1520,9 +1527,9 @@ export default function Home() {
                                         <span className="text-xs text-amber-500 font-semibold">{formatRoundName(match.round)} • Partido {match.num}</span>
                                         <h3 className="font-bold text-slate-200 mt-0.5 flex items-center space-x-2">
                                           {getFlagUrl(match.team1) && (
-                                            <img 
-                                              src={getFlagUrl(match.team1)!} 
-                                              alt={match.team1} 
+                                            <img
+                                              src={getFlagUrl(match.team1)!}
+                                              alt={match.team1}
                                               className="w-5 h-3.5 object-cover rounded-sm shadow-sm border border-slate-900"
                                             />
                                           )}
@@ -1530,9 +1537,9 @@ export default function Home() {
                                           <span className="text-slate-500 font-semibold text-xs">vs</span>
                                           <span>{match.team2}</span>
                                           {getFlagUrl(match.team2) && (
-                                            <img 
-                                              src={getFlagUrl(match.team2)!} 
-                                              alt={match.team2} 
+                                            <img
+                                              src={getFlagUrl(match.team2)!}
+                                              alt={match.team2}
                                               className="w-5 h-3.5 object-cover rounded-sm shadow-sm border border-slate-900"
                                             />
                                           )}
@@ -1687,7 +1694,7 @@ export default function Home() {
                                     const tzAbbr = getTzAbbreviation();
 
                                     return (
-                                      <div 
+                                      <div
                                         key={match.id}
                                         className="bg-slate-900/40 border border-slate-900/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
                                       >
@@ -1696,9 +1703,9 @@ export default function Home() {
                                           <span className="text-xs text-amber-500 font-semibold">{formatRoundName(match.round)} • Partido {match.num}</span>
                                           <h3 className="font-bold text-slate-200 mt-0.5 flex items-center space-x-2">
                                             {getFlagUrl(match.team1) && (
-                                              <img 
-                                                src={getFlagUrl(match.team1)!} 
-                                                alt={match.team1} 
+                                              <img
+                                                src={getFlagUrl(match.team1)!}
+                                                alt={match.team1}
                                                 className="w-5 h-3.5 object-cover rounded-sm shadow-sm border border-slate-900"
                                               />
                                             )}
@@ -1706,9 +1713,9 @@ export default function Home() {
                                             <span className="text-slate-500 font-semibold text-xs">vs</span>
                                             <span>{match.team2}</span>
                                             {getFlagUrl(match.team2) && (
-                                              <img 
-                                                src={getFlagUrl(match.team2)!} 
-                                                alt={match.team2} 
+                                              <img
+                                                src={getFlagUrl(match.team2)!}
+                                                alt={match.team2}
                                                 className="w-5 h-3.5 object-cover rounded-sm shadow-sm border border-slate-900"
                                               />
                                             )}
@@ -1761,11 +1768,7 @@ export default function Home() {
 
                                           {/* Points Indicator if match has result */}
                                           {hasResult && pred && (
-                                            <span className={`text-xs font-bold px-2 py-1.5 rounded-lg border ${
-                                              pred.points === 1 
-                                                ? "bg-amber-500/10 text-amber-400 border-amber-500/20" 
-                                                : "bg-slate-800 text-slate-500 border-transparent"
-                                            }`}>
+                                            <span className={`text-xs font-bold px-2 py-1.5 rounded-lg ${getPointsBadgeClass(pred.points, match.date < "2026-06-13")}`}>
                                               +{pred.points} Pts
                                             </span>
                                           )}
