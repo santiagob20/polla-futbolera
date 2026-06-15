@@ -1319,19 +1319,7 @@ export default function Home() {
                       </button>
                     </div>
 
-                    {leaderboardPhase === "new" ? (
-                      financialStats.rolloverNew > 0 && (
-                        <div className="mt-4 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs px-4 py-3 rounded-xl flex items-center justify-between">
-                          <span>💰 <strong>Bolsa Acumulada (Fase Nueva):</strong> Nadie acertó el marcador exacto en el último partido. El pozo acumulado para el próximo partido es de <strong>${financialStats.rolloverNew} COP</strong>.</span>
-                        </div>
-                      )
-                    ) : (
-                      financialStats.rolloverOld > 0 && (
-                        <div className="mt-4 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs px-4 py-3 rounded-xl flex items-center justify-between">
-                          <span>💰 <strong>Bolsa Acumulada (Fase Anterior):</strong> El pozo acumulado final de la fase anterior fue de <strong>${financialStats.rolloverOld} COP</strong>.</span>
-                        </div>
-                      )
-                    )}
+
 
                     <div className="mt-6 overflow-x-auto rounded-xl border border-slate-950 bg-slate-950/20">
                       <table className="w-full text-left border-collapse min-w-[500px]">
