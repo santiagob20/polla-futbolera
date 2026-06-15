@@ -167,6 +167,7 @@ export default function Home() {
   const [adminUserDrafts, setAdminUserDrafts] = useState<{ [matchId: string]: { goals1: string; goals2: string } }>({});
   const [adminSavingUserPreds, setAdminSavingUserPreds] = useState<{ [matchId: string]: boolean }>({});
   const [adminRecalculating, setAdminRecalculating] = useState(false);
+  const [hidePastMatchesAdmin, setHidePastMatchesAdmin] = useState(true);
 
   // Auth Handler
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -735,6 +736,13 @@ export default function Home() {
     return filteredMatches;
   }, [filteredMatches, hidePastMatches]);
 
+  const adminFilteredMatches = React.useMemo(() => {
+    if (hidePastMatchesAdmin) {
+      return filteredMatches.filter(m => !isMatchPast(m));
+    }
+    return filteredMatches;
+  }, [filteredMatches, hidePastMatchesAdmin]);
+
   const userGroupedMatches = React.useMemo(() => {
     const sorted = [...userFilteredMatches].sort((a, b) => {
       const dateA = getMatchDate(a).getTime();
@@ -772,7 +780,7 @@ export default function Home() {
   }, [userFilteredMatches]);
 
   const groupedMatches = React.useMemo(() => {
-    const sorted = [...filteredMatches].sort((a, b) => {
+    const sorted = [...adminFilteredMatches].sort((a, b) => {
       const dateA = getMatchDate(a).getTime();
       const dateB = getMatchDate(b).getTime();
       if (dateA !== dateB) {
@@ -805,7 +813,7 @@ export default function Home() {
       dateLabel: label,
       matches: groups[label]
     }));
-  }, [filteredMatches]);
+  }, [adminFilteredMatches]);
 
   if (loading) {
     return (
@@ -1476,21 +1484,46 @@ export default function Home() {
                           <h3 className="font-bold text-slate-200 text-sm">Filtrar por Ronda</h3>
                           <p className="text-slate-400 text-[10px]">Filtra los partidos para registrar marcadores con mayor comodidad</p>
                         </div>
-                        <select
-                          value={selectedRound}
-                          onChange={(e) => setSelectedRound(e.target.value)}
-                          className="px-4 py-2 bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl focus:outline-none focus:border-amber-500"
-                        >
-                          {rounds.map((round) => (
-                            <option key={round} value={round}>{formatRoundName(round)}</option>
-                          ))}
-                        </select>
+                        <div className="flex items-center gap-2.5 w-full md:w-auto justify-start md:justify-end">
+                          {pastMatchesCount > 0 && (
+                            <button
+                              onClick={() => setHidePastMatchesAdmin(!hidePastMatchesAdmin)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 shrink-0 ${!hidePastMatchesAdmin
+                                  ? "bg-amber-950/30 text-amber-400 border-amber-900/40 hover:bg-amber-900/20"
+                                  : "bg-slate-900/60 text-slate-300 border-slate-800 hover:bg-slate-800"
+                                }`}
+                            >
+                              👁️ Pasados {pastMatchesCount > 0 && `(${pastMatchesCount})`}
+                            </button>
+                          )}
+                          <select
+                            value={selectedRound}
+                            onChange={(e) => setSelectedRound(e.target.value)}
+                            className="px-4 py-2 bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl focus:outline-none focus:border-amber-500 w-full md:w-auto"
+                          >
+                            {rounds.map((round) => (
+                              <option key={round} value={round}>{formatRoundName(round)}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
 
                       <div className="space-y-6">
                         {groupedMatches.length === 0 ? (
-                          <div className="py-12 text-center text-slate-500">
-                            No se encontraron partidos para esta ronda.
+                          <div className="col-span-full py-12 text-center text-slate-500 bg-slate-900/10 border border-slate-900/40 rounded-2xl p-6">
+                            {pastMatchesCount > 0 && hidePastMatchesAdmin ? (
+                              <>
+                                <p className="text-slate-400 text-sm mb-3">Todos los partidos de esta ronda ya pasaron o están archivados.</p>
+                                <button
+                                  onClick={() => setHidePastMatchesAdmin(false)}
+                                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-extrabold rounded-xl transition-colors shadow-lg shadow-amber-500/20"
+                                >
+                                  Ver partidos pasados
+                                </button>
+                              </>
+                            ) : (
+                              "No se encontraron partidos para esta ronda."
+                            )}
                           </div>
                         ) : (
                           groupedMatches.map((group) => (
@@ -1641,15 +1674,28 @@ export default function Home() {
                           <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                             Filtrar por Ronda
                           </label>
-                          <select
-                            value={selectedRound}
-                            onChange={(e) => setSelectedRound(e.target.value)}
-                            className="w-full md:w-64 px-4 py-2.5 bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl focus:outline-none focus:border-amber-500"
-                          >
-                            {rounds.map((round) => (
-                              <option key={round} value={round}>{formatRoundName(round)}</option>
-                            ))}
-                          </select>
+                          <div className="flex items-center gap-2.5 w-full md:w-auto justify-start md:justify-end">
+                            {pastMatchesCount > 0 && (
+                              <button
+                                onClick={() => setHidePastMatchesAdmin(!hidePastMatchesAdmin)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 shrink-0 ${!hidePastMatchesAdmin
+                                    ? "bg-amber-950/30 text-amber-400 border-amber-900/40 hover:bg-amber-900/20"
+                                    : "bg-slate-900/60 text-slate-300 border-slate-800 hover:bg-slate-800"
+                                  }`}
+                              >
+                                👁️ Pasados {pastMatchesCount > 0 && `(${pastMatchesCount})`}
+                              </button>
+                            )}
+                            <select
+                              value={selectedRound}
+                              onChange={(e) => setSelectedRound(e.target.value)}
+                              className="w-full md:w-64 px-4 py-2 bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-xl focus:outline-none focus:border-amber-500"
+                            >
+                              {rounds.map((round) => (
+                                <option key={round} value={round}>{formatRoundName(round)}</option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
                       </div>
 
@@ -1662,8 +1708,20 @@ export default function Home() {
                       ) : (
                         <div className="space-y-6">
                           {groupedMatches.length === 0 ? (
-                            <div className="py-12 text-center text-slate-500">
-                              No se encontraron partidos para esta ronda.
+                            <div className="col-span-full py-12 text-center text-slate-500 bg-slate-900/10 border border-slate-900/40 rounded-2xl p-6">
+                              {pastMatchesCount > 0 && hidePastMatchesAdmin ? (
+                                <>
+                                  <p className="text-slate-400 text-sm mb-3">Todos los partidos de esta ronda ya pasaron o están archivados.</p>
+                                  <button
+                                    onClick={() => setHidePastMatchesAdmin(false)}
+                                    className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-extrabold rounded-xl transition-colors shadow-lg shadow-amber-500/20"
+                                  >
+                                    Ver partidos pasados
+                                  </button>
+                                </>
+                              ) : (
+                                "No se encontraron partidos para esta ronda."
+                              )}
                             </div>
                           ) : (
                             groupedMatches.map((group) => (
