@@ -71,6 +71,13 @@ const isMatchPast = (match: Match): boolean => {
   return getMatchDate(match).getTime() < todayStart.getTime();
 };
 
+const hasMatchStarted = (match: Match): boolean => {
+  if (match.result !== null) {
+    return true;
+  }
+  return Date.now() >= getMatchDate(match).getTime();
+};
+
 const formatRoundName = (round: string): string => {
   if (!round) return "";
   return round
@@ -168,6 +175,10 @@ export default function Home() {
   const [adminSavingUserPreds, setAdminSavingUserPreds] = useState<{ [matchId: string]: boolean }>({});
   const [adminRecalculating, setAdminRecalculating] = useState(false);
   const [hidePastMatchesAdmin, setHidePastMatchesAdmin] = useState(true);
+
+  // View user predictions modal states
+  const [viewingUser, setViewingUser] = useState<UserProfile | null>(null);
+  const [viewingUserFilter, setViewingUserFilter] = useState<"started" | "all">("started");
 
   // Auth Handler
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -1295,7 +1306,9 @@ export default function Home() {
                 <div className="space-y-6">
                   <div className="bg-slate-900/40 border border-slate-900 rounded-2xl p-6">
                     <h2 className="text-xl font-extrabold text-slate-200">Tabla de Clasificación</h2>
-                    <p className="text-slate-400 text-xs mt-1">Conoce a los mejores pronosticadores de la copa</p>
+                    <p className="text-slate-400 text-xs mt-1">
+                      Conoce a los mejores pronosticadores de la copa • <span className="text-amber-400 font-semibold">Toca sobre cualquier jugador para auditar sus pronósticos 👁️</span>
+                    </p>
 
                     {/* Selectora de Fase */}
                     <div className="flex bg-slate-950/60 p-1 rounded-xl border border-slate-900 max-w-md mt-5">
@@ -1346,14 +1359,18 @@ export default function Home() {
                             return (
                               <tr
                                 key={userProf.uid}
-                                className={`text-xs sm:text-sm hover:bg-slate-900/20 transition-colors ${isMe ? "bg-amber-500/5 text-amber-400 font-bold" : "text-slate-300"
+                                className={`text-xs sm:text-sm hover:bg-slate-900/40 transition-colors cursor-pointer group ${isMe ? "bg-amber-500/5 text-amber-400 font-bold" : "text-slate-355"
                                   }`}
+                                onClick={() => setViewingUser(userProf)}
+                                title={`Ver pronósticos de ${userProf.displayName}`}
                               >
                                 <td className="py-3 sm:py-4 px-3 sm:px-6 text-center font-extrabold">
                                   {index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : index + 1}
                                 </td>
                                 <td className="py-3 sm:py-4 px-3 sm:px-6 truncate max-w-[120px] sm:max-w-[200px]">
-                                  {userProf.displayName} {isMe && <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded ml-2">Tú</span>}
+                                  <span className="align-middle hover:text-amber-400 transition-colors">{userProf.displayName}</span>
+                                  <span className="inline-block ml-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-slate-500 text-[10px] align-middle">👁️</span>
+                                  {isMe && <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded ml-2 align-middle">Tú</span>}
                                 </td>
                                 <td className="py-3 sm:py-4 px-3 sm:px-6 text-center text-slate-400">
                                   {userStats.predictionsCount}
@@ -1844,6 +1861,187 @@ export default function Home() {
           )}
         </section>
       </main>
+
+      {/* Modal de Historial de Pronósticos de otro Usuario */}
+      {viewingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 max-w-2xl w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4 shrink-0">
+              <div className="space-y-1">
+                <h2 className="text-lg sm:text-xl font-black text-slate-100 flex items-center gap-2">
+                  <span>🏆</span>
+                  <span>Pronósticos de {viewingUser.displayName}</span>
+                </h2>
+                {(() => {
+                  const userCalc = calculatedPoints[viewingUser.uid] || { pointsOld: 0, pointsNew: 0 };
+                  const pts = leaderboardPhase === "new" ? userCalc.pointsNew : userCalc.pointsOld;
+                  return (
+                    <p className="text-xs text-slate-400">
+                      Puntos ({leaderboardPhase === "new" ? "Fase Nueva" : "Fase Anterior"}): <span className="text-amber-400 font-extrabold">{pts} Pts</span>
+                    </p>
+                  );
+                })()}
+              </div>
+              <button 
+                onClick={() => {
+                  setViewingUser(null);
+                  setViewingUserFilter("started");
+                }}
+                className="text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 w-8 h-8 rounded-full flex items-center justify-center transition-colors font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="flex gap-2 shrink-0 bg-slate-950/50 p-1 rounded-xl border border-slate-800/60 w-fit">
+              <button
+                onClick={() => setViewingUserFilter("started")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  viewingUserFilter === "started"
+                    ? "bg-amber-500 text-slate-950 shadow-md"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                ⚡ Partidos Iniciados / Finalizados
+              </button>
+              <button
+                onClick={() => setViewingUserFilter("all")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  viewingUserFilter === "all"
+                    ? "bg-amber-500 text-slate-950 shadow-md"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                📅 Todos los Partidos
+              </button>
+            </div>
+
+            {/* Match List */}
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+              {(() => {
+                const sortedMatches = [...matches].sort((a, b) => {
+                  const dateA = getMatchDate(a).getTime();
+                  const dateB = getMatchDate(b).getTime();
+                  if (dateA !== dateB) {
+                    return dateA - dateB;
+                  }
+                  return a.num - b.num;
+                });
+
+                const filteredList = sortedMatches.filter(match => {
+                  if (viewingUserFilter === "started") {
+                    return hasMatchStarted(match);
+                  }
+                  return true;
+                });
+
+                if (filteredList.length === 0) {
+                  return (
+                    <div className="text-center py-12 text-slate-500 text-sm">
+                      No hay partidos en esta categoría aún.
+                    </div>
+                  );
+                }
+
+                return filteredList.map(match => {
+                  const pred = allPredictions.find(p => p.userId === viewingUser.uid && p.matchId === match.id);
+                  const hasStarted = hasMatchStarted(match);
+                  const hasResult = match.result !== null;
+
+                  const matchDate = getMatchDate(match);
+                  const localTimeStr = matchDate.toLocaleTimeString(undefined, {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                  });
+                  const tzAbbr = getTzAbbreviation();
+
+                  let pts = 0;
+                  if (match.result && pred) {
+                    const isOld = match.date < "2026-06-13";
+                    pts = isOld
+                      ? calculatePointsOld(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2)
+                      : calculatePointsNew(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2);
+                  }
+
+                  return (
+                    <div key={match.id} className="bg-slate-950/45 border border-slate-850 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-955/80 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[10px] text-amber-500 font-extrabold uppercase tracking-wider">{formatRoundName(match.round)} {match.group ? `• ${match.group}` : ""}</span>
+                        <div className="font-extrabold text-sm text-slate-200 mt-1 flex items-center space-x-2 truncate">
+                          {getFlagUrl(match.team1) && (
+                            <img src={getFlagUrl(match.team1)!} alt={match.team1} className="w-5 h-3.5 object-cover rounded-sm border border-slate-900 shrink-0" />
+                          )}
+                          <span className="truncate">{match.team1}</span>
+                          <span className="text-slate-500 font-bold text-xs shrink-0">vs</span>
+                          <span className="truncate">{match.team2}</span>
+                          {getFlagUrl(match.team2) && (
+                            <img src={getFlagUrl(match.team2)!} alt={match.team2} className="w-5 h-3.5 object-cover rounded-sm border border-slate-900 shrink-0" />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                        {/* Real result indicator */}
+                        {hasResult ? (
+                          <span className="text-[11px] bg-slate-900/60 border border-slate-800 text-slate-300 px-2 py-1 rounded-lg font-bold">
+                            {match.result?.isFinal === false ? "En Vivo: " : "Final: "}{match.result?.goals1} - {match.result?.goals2}
+                          </span>
+                        ) : hasStarted ? (
+                          <span className="text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2.5 py-1 rounded-lg font-extrabold">
+                            ⚡ En Juego
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-500 font-semibold">{localTimeStr} {tzAbbr}</span>
+                        )}
+
+                        {/* Prediction view */}
+                        <div className="flex items-center gap-2 min-w-[90px] justify-end">
+                          {hasStarted ? (
+                            pred ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs bg-slate-900 border border-slate-800 text-amber-400 px-2 py-1 rounded-lg font-bold font-mono">
+                                  {pred.goals1} - {pred.goals2}
+                                </span>
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${getPointsBadgeClass(pts, match.date < "2026-06-13")}`}>
+                                  +{pts} Pts {match.result?.isFinal === false ? "(Prov.)" : ""}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-rose-500 font-bold bg-rose-500/5 px-2.5 py-1 rounded-lg border border-rose-500/10">Sin pronóstico</span>
+                            )
+                          ) : (
+                            <div className="flex items-center gap-1 text-[10px] text-slate-500 bg-slate-900/40 px-2.5 py-1 rounded-lg border border-slate-800/60 font-extrabold uppercase tracking-wider">
+                              <span>🔒 Oculto</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="pt-2 border-t border-slate-800 flex justify-end shrink-0">
+              <button
+                onClick={() => {
+                  setViewingUser(null);
+                  setViewingUserFilter("started");
+                }}
+                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-200 font-bold rounded-xl text-xs transition-all active:scale-[0.98]"
+              >
+                Cerrar
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
