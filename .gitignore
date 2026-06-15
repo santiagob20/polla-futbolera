@@ -42,4 +42,5 @@ next-env.d.ts
 
 # local google apps script file containing secrets
 /google-script.js
+/google-script-guiza.js
 
