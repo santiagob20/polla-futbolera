@@ -1876,11 +1876,20 @@ export default function Home() {
                 </h2>
                 {(() => {
                   const userCalc = calculatedPoints[viewingUser.uid] || { pointsOld: 0, pointsNew: 0 };
-                  const pts = leaderboardPhase === "new" ? userCalc.pointsNew : userCalc.pointsOld;
                   return (
-                    <p className="text-xs text-slate-400">
-                      Puntos ({leaderboardPhase === "new" ? "Fase Nueva" : "Fase Anterior"}): <span className="text-amber-400 font-extrabold">{pts} Pts</span>
-                    </p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+                      <span>
+                        Fase Nueva: <span className="text-amber-400 font-extrabold">{userCalc.pointsNew} Pts</span>
+                      </span>
+                      <span className="text-slate-700">•</span>
+                      <span>
+                        Fase Anterior: <span className="text-slate-300 font-extrabold">{userCalc.pointsOld} Pts</span>
+                      </span>
+                      <span className="text-slate-700">•</span>
+                      <span>
+                        Total: <span className="text-slate-200 font-extrabold">{userCalc.pointsNew + userCalc.pointsOld} Pts</span>
+                      </span>
+                    </div>
                   );
                 })()}
               </div>
@@ -1901,7 +1910,7 @@ export default function Home() {
                 onClick={() => setViewingUserFilter("started")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                   viewingUserFilter === "started"
-                    ? "bg-amber-500 text-slate-950 shadow-md"
+                    ? "bg-amber-500 text-slate-955 shadow-md"
                     : "text-slate-400 hover:text-slate-200"
                 }`}
               >
@@ -1911,7 +1920,7 @@ export default function Home() {
                 onClick={() => setViewingUserFilter("all")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                   viewingUserFilter === "all"
-                    ? "bg-amber-500 text-slate-950 shadow-md"
+                    ? "bg-amber-500 text-slate-955 shadow-md"
                     : "text-slate-400 hover:text-slate-200"
                 }`}
               >
@@ -1946,7 +1955,7 @@ export default function Home() {
                   );
                 }
 
-                return filteredList.map(match => {
+                const renderMatchRow = (match: Match) => {
                   const pred = allPredictions.find(p => p.userId === viewingUser.uid && p.matchId === match.id);
                   const hasStarted = hasMatchStarted(match);
                   const hasResult = match.result !== null;
@@ -1960,15 +1969,15 @@ export default function Home() {
                   const tzAbbr = getTzAbbreviation();
 
                   let pts = 0;
+                  const isOld = match.date < "2026-06-13";
                   if (match.result && pred) {
-                    const isOld = match.date < "2026-06-13";
                     pts = isOld
                       ? calculatePointsOld(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2)
                       : calculatePointsNew(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2);
                   }
 
                   return (
-                    <div key={match.id} className="bg-slate-950/45 border border-slate-850 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-955/80 transition-colors">
+                    <div key={match.id} className="bg-slate-955/30 border border-slate-850 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-950/60 transition-colors">
                       <div className="flex-1 min-w-0">
                         <span className="text-[10px] text-amber-500 font-extrabold uppercase tracking-wider">{formatRoundName(match.round)} {match.group ? `• ${match.group}` : ""}</span>
                         <div className="font-extrabold text-sm text-slate-200 mt-1 flex items-center space-x-2 truncate">
@@ -2006,7 +2015,7 @@ export default function Home() {
                                 <span className="text-xs bg-slate-900 border border-slate-800 text-amber-400 px-2 py-1 rounded-lg font-bold font-mono">
                                   {pred.goals1} - {pred.goals2}
                                 </span>
-                                <span className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${getPointsBadgeClass(pts, match.date < "2026-06-13")}`}>
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${getPointsBadgeClass(pts, isOld)}`}>
                                   +{pts} Pts {match.result?.isFinal === false ? "(Prov.)" : ""}
                                 </span>
                               </div>
@@ -2022,7 +2031,48 @@ export default function Home() {
                       </div>
                     </div>
                   );
-                });
+                };
+
+                const newMatches = filteredList.filter(m => m.date >= "2026-06-13");
+                const oldMatches = filteredList.filter(m => m.date < "2026-06-13");
+
+                return (
+                  <div className="space-y-6">
+                    {/* Fase Nueva */}
+                    {newMatches.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800/60 pb-2">
+                          <h3 className="text-xs font-extrabold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+                            <span>✨</span> Fase Nueva (Desde Jun 13)
+                          </h3>
+                          <span className="text-[10px] text-slate-500 font-medium">
+                            Regla nueva: +5 Exacto, +3 Dif/Ganador, +1 Simple
+                          </span>
+                        </div>
+                        <div className="space-y-3">
+                          {newMatches.map(match => renderMatchRow(match))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Fase Anterior */}
+                    {oldMatches.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800/60 pb-2">
+                          <h3 className="text-xs font-extrabold text-slate-400 flex items-center gap-1.5 uppercase tracking-wider">
+                            <span>⏳</span> Fase Anterior (Hasta Jun 12)
+                          </h3>
+                          <span className="text-[10px] text-slate-500 font-medium">
+                            Regla anterior: +1 Exacto (No aplica regla nueva)
+                          </span>
+                        </div>
+                        <div className="space-y-3">
+                          {oldMatches.map(match => renderMatchRow(match))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
               })()}
             </div>
             
