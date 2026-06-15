@@ -1178,6 +1178,8 @@ export default function Home() {
                             const draft = predictionDrafts[match.id] || { goals1: "", goals2: "" };
                             const isSaving = savingMatches[match.id];
                             const hasResult = match.result !== null;
+                            const isFinal = match.result !== null && match.result.isFinal !== false;
+                            const isLive = hasMatchStarted(match) && (match.result === null || match.result.isFinal === false);
 
                             const matchDate = getMatchDate(match);
                             const localTimeStr = matchDate.toLocaleTimeString(undefined, {
@@ -1193,8 +1195,16 @@ export default function Home() {
                                 className="bg-slate-900/40 hover:bg-slate-900/60 transition-all border border-slate-900/80 hover:border-slate-800 rounded-2xl p-5 flex flex-col justify-between"
                               >
                                 {/* Match Header */}
-                                <div className="flex justify-between items-center text-xs text-slate-400 border-b border-slate-950/60 pb-3 mb-4">
+                                <div className="flex justify-between items-center text-xs text-slate-400 border-b border-slate-950/60 pb-3 mb-4 relative">
                                   <span className="font-bold text-amber-500">{formatRoundName(match.round)} {match.group ? `• ${match.group}` : ""}</span>
+                                  {isLive && (
+                                    <div className="absolute left-1/2 -translate-x-1/2">
+                                      <span className="text-[10px] sm:text-xs bg-amber-500/15 border border-amber-500/30 text-amber-500 px-2.5 py-1 rounded-lg font-extrabold flex items-center gap-1.5 animate-pulse">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                                        ⚡ En Juego
+                                      </span>
+                                    </div>
+                                  )}
                                   <span className="font-semibold text-slate-300">{localTimeStr} {tzAbbr}</span>
                                 </div>
 
@@ -1221,7 +1231,7 @@ export default function Home() {
                                       inputMode="numeric"
                                       pattern="[0-9]*"
                                       value={draft.goals1}
-                                      disabled={hasResult || isSaving}
+                                      disabled={hasResult || isSaving || hasMatchStarted(match)}
                                       onChange={(e) => {
                                         const val = e.target.value.replace(/[^0-9]/g, "");
                                         setPredictionDrafts(prev => ({
@@ -1238,7 +1248,7 @@ export default function Home() {
                                       inputMode="numeric"
                                       pattern="[0-9]*"
                                       value={draft.goals2}
-                                      disabled={hasResult || isSaving}
+                                      disabled={hasResult || isSaving || hasMatchStarted(match)}
                                       onChange={(e) => {
                                         const val = e.target.value.replace(/[^0-9]/g, "");
                                         setPredictionDrafts(prev => ({
@@ -1272,24 +1282,65 @@ export default function Home() {
                                     {match.ground}
                                   </span>
 
-                                  {hasResult ? (
-                                    <div className="flex items-center space-x-2 shrink-0">
-                                      <span className="text-xs bg-slate-950 border border-slate-800 text-slate-400 px-2.5 py-1 rounded-lg whitespace-nowrap">
-                                        {match.result?.isFinal === false ? "En Vivo: " : "Final: "}{match.result?.goals1} - {match.result?.goals2}
-                                      </span>
-                                      <span className={`text-xs font-bold px-2 py-1 rounded-lg whitespace-nowrap ${getPointsBadgeClass(pred?.points ?? 0, match.date < "2026-06-13")}`}>
-                                        +{pred?.points ?? 0} Pts {match.result?.isFinal === false ? "(Prov.)" : ""}
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <button
-                                      onClick={() => savePrediction(match.id)}
-                                      disabled={isSaving || draft.goals1 === "" || draft.goals2 === ""}
-                                      className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-850 disabled:text-slate-600 disabled:border-slate-800/80 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-md active:scale-[0.95]"
-                                    >
-                                      {isSaving ? "Guardando..." : pred ? "Actualizar" : "Guardar"}
-                                    </button>
-                                  )}
+                                  {(() => {
+                                    if (isFinal) {
+                                      return (
+                                        <div className="flex items-center space-x-2 shrink-0">
+                                          <span className="text-xs bg-slate-950 border border-slate-800 text-slate-400 px-2.5 py-1 rounded-lg whitespace-nowrap">
+                                            Final: {match.result?.goals1} - {match.result?.goals2}
+                                          </span>
+                                          {pred ? (
+                                            <span className={`text-xs font-bold px-2 py-1 rounded-lg whitespace-nowrap ${getPointsBadgeClass(pred?.points ?? 0, match.date < "2026-06-13")}`}>
+                                              +{pred?.points ?? 0} Pts
+                                            </span>
+                                          ) : (
+                                            <span className="text-xs font-bold px-2 py-1 rounded-lg bg-slate-950 border border-slate-850/80 text-rose-500 whitespace-nowrap">
+                                              Sin pronóstico
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    }
+
+                                    if (isLive) {
+                                      const liveGoals1 = match.result ? match.result.goals1 : 0;
+                                      const liveGoals2 = match.result ? match.result.goals2 : 0;
+                                      let currentPoints = 0;
+                                      if (pred) {
+                                        currentPoints = (match.date < "2026-06-13")
+                                          ? calculatePointsOld(pred.goals1, pred.goals2, liveGoals1, liveGoals2)
+                                          : calculatePointsNew(pred.goals1, pred.goals2, liveGoals1, liveGoals2);
+                                      }
+
+                                      return (
+                                        <div className="flex items-center space-x-2 shrink-0">
+                                          <span className="text-xs bg-slate-950 border border-slate-800 text-slate-350 px-2.5 py-1 rounded-lg font-bold whitespace-nowrap">
+                                            En Vivo: <span className="text-amber-400">{liveGoals1} - {liveGoals2}</span>
+                                          </span>
+                                          {pred ? (
+                                            <span className={`text-xs font-bold px-2 py-1 rounded-lg whitespace-nowrap ${getPointsBadgeClass(currentPoints, match.date < "2026-06-13")}`}>
+                                              +{currentPoints} Pts (Prov.)
+                                            </span>
+                                          ) : (
+                                            <span className="text-xs font-bold px-2 py-1 rounded-lg bg-slate-950 border border-slate-850/80 text-rose-500 whitespace-nowrap">
+                                              Sin pronóstico
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    }
+
+                                    // Not started yet
+                                    return (
+                                      <button
+                                        onClick={() => savePrediction(match.id)}
+                                        disabled={isSaving || draft.goals1 === "" || draft.goals2 === ""}
+                                        className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-850 disabled:text-slate-600 disabled:border-slate-800/80 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-md active:scale-[0.95]"
+                                      >
+                                        {isSaving ? "Guardando..." : pred ? "Actualizar" : "Guardar"}
+                                      </button>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                             );
@@ -1940,12 +1991,23 @@ export default function Home() {
                   return a.num - b.num;
                 });
 
-                const filteredList = sortedMatches.filter(match => {
+                let filteredList = sortedMatches.filter(match => {
                   if (viewingUserFilter === "started") {
                     return hasMatchStarted(match);
                   }
                   return true;
                 });
+
+                if (viewingUserFilter === "started") {
+                  filteredList = [...filteredList].sort((a, b) => {
+                    const dateA = getMatchDate(a).getTime();
+                    const dateB = getMatchDate(b).getTime();
+                    if (dateA !== dateB) {
+                      return dateB - dateA;
+                    }
+                    return b.num - a.num;
+                  });
+                }
 
                 if (filteredList.length === 0) {
                   return (
@@ -1959,6 +2021,7 @@ export default function Home() {
                   const pred = allPredictions.find(p => p.userId === viewingUser.uid && p.matchId === match.id);
                   const hasStarted = hasMatchStarted(match);
                   const hasResult = match.result !== null;
+                  const isLive = hasStarted && (match.result === null || match.result.isFinal === false);
 
                   const matchDate = getMatchDate(match);
                   const localTimeStr = matchDate.toLocaleTimeString(undefined, {
@@ -1970,17 +2033,33 @@ export default function Home() {
 
                   let pts = 0;
                   const isOld = match.date < "2026-06-13";
-                  if (match.result && pred) {
-                    pts = isOld
-                      ? calculatePointsOld(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2)
-                      : calculatePointsNew(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2);
+                  if (pred) {
+                    if (match.result) {
+                      pts = isOld
+                        ? calculatePointsOld(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2)
+                        : calculatePointsNew(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2);
+                    } else if (hasStarted) {
+                      pts = isOld
+                        ? calculatePointsOld(pred.goals1, pred.goals2, 0, 0)
+                        : calculatePointsNew(pred.goals1, pred.goals2, 0, 0);
+                    }
                   }
 
                   return (
                     <div key={match.id} className="bg-slate-955/30 border border-slate-850 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-950/60 transition-colors">
                       <div className="flex-1 min-w-0">
-                        <span className="text-[10px] text-amber-500 font-extrabold uppercase tracking-wider">{formatRoundName(match.round)} {match.group ? `• ${match.group}` : ""}</span>
-                        <div className="font-extrabold text-sm text-slate-200 mt-1 flex items-center space-x-2 truncate">
+                        <div className="flex justify-between items-center sm:justify-start sm:gap-2">
+                          <span className="text-[10px] text-amber-500 font-extrabold uppercase tracking-wider">
+                            {formatRoundName(match.round)} {match.group ? `• ${match.group}` : ""}
+                          </span>
+                          {isLive && (
+                            <span className="text-[9px] bg-amber-500/15 border border-amber-500/30 text-amber-500 px-1.5 py-0.5 rounded font-bold flex items-center gap-1 animate-pulse">
+                              <span className="w-1 h-1 rounded-full bg-amber-500 animate-ping"></span>
+                              ⚡ En Juego
+                            </span>
+                          )}
+                        </div>
+                        <div className="font-extrabold text-sm text-slate-200 mt-1.5 flex items-center space-x-2 truncate">
                           {getFlagUrl(match.team1) && (
                             <img src={getFlagUrl(match.team1)!} alt={match.team1} className="w-5 h-3.5 object-cover rounded-sm border border-slate-900 shrink-0" />
                           )}
@@ -1995,17 +2074,31 @@ export default function Home() {
 
                       <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
                         {/* Real result indicator */}
-                        {hasResult ? (
-                          <span className="text-[11px] bg-slate-900/60 border border-slate-800 text-slate-300 px-2 py-1 rounded-lg font-bold">
-                            {match.result?.isFinal === false ? "En Vivo: " : "Final: "}{match.result?.goals1} - {match.result?.goals2}
-                          </span>
-                        ) : hasStarted ? (
-                          <span className="text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2.5 py-1 rounded-lg font-extrabold">
-                            ⚡ En Juego
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-slate-500 font-semibold">{localTimeStr} {tzAbbr}</span>
-                        )}
+                        {(() => {
+                          const isFinal = match.result !== null && match.result.isFinal !== false;
+
+                          if (isFinal) {
+                            return (
+                              <span className="text-[11px] bg-slate-900/60 border border-slate-800 text-slate-300 px-2 py-1 rounded-lg font-bold">
+                                Final: {match.result?.goals1} - {match.result?.goals2}
+                              </span>
+                            );
+                          }
+
+                          if (isLive) {
+                            const liveGoals1 = match.result ? match.result.goals1 : 0;
+                            const liveGoals2 = match.result ? match.result.goals2 : 0;
+                            return (
+                              <span className="text-[11px] bg-slate-900/60 border border-slate-800 text-slate-300 px-2 py-1 rounded-lg font-bold">
+                                En Vivo: {liveGoals1} - {liveGoals2}
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <span className="text-[10px] text-slate-500 font-semibold">{localTimeStr} {tzAbbr}</span>
+                          );
+                        })()}
 
                         {/* Prediction view */}
                         <div className="flex items-center gap-2 min-w-[90px] justify-end">
