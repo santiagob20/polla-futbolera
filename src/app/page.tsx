@@ -82,7 +82,7 @@ const formatRoundName = (round: string): string => {
   if (!round) return "";
   return round
     .replace(/Matchday\s+(\d+)/gi, "Día $1")
-    .replace(/Round of 32/gi, "Ronda de 32")
+    .replace(/Round of 32/gi, "Dieciseisavos")
     .replace(/Round of 16/gi, "Octavos")
     .replace(/Quarter-final/gi, "Cuartos")
     .replace(/Semi-final/gi, "Semifinal")
@@ -602,7 +602,7 @@ export default function Home() {
     let rolloverNew = 0;
 
     sortedMatches.forEach(match => {
-      if (!match.result) return;
+      if (!match.result || match.result.isFinal === false) return;
 
       const matchPreds = allPredictions.filter(p => p.matchId === match.id);
       if (matchPreds.length === 0) return;
@@ -688,7 +688,7 @@ export default function Home() {
 
     allPredictions.forEach(pred => {
       const match = matchesMap[pred.matchId];
-      if (match && match.result) {
+      if (match && match.result && match.result.isFinal !== false) {
         const isOld = match.date < "2026-06-13";
         const pts = isOld
           ? calculatePointsOld(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2)
