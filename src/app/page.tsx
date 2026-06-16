@@ -69,7 +69,9 @@ const getMatchDate = (match: Match): Date => {
 const isMatchPast = (match: Match): boolean => {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  return getMatchDate(match).getTime() < todayStart.getTime();
+  if (getMatchDate(match).getTime() < todayStart.getTime()) return true;
+  // Also treat today's finalized matches as past (archived)
+  return match.result !== null && match.result.isFinal !== false;
 };
 
 const hasMatchStarted = (match: Match): boolean => {
@@ -238,7 +240,8 @@ export default function Home() {
         const str  = localStorage.getItem("polla_archived_cache");
         const time = localStorage.getItem("polla_archived_cache_time");
         if (str && time && (Date.now() - parseInt(time, 10)) <= ARCHIVED_TTL) {
-          archivedMatches = JSON.parse(str) as Match[];
+          const parsed = JSON.parse(str) as Match[];
+          archivedMatches = Array.from(new Map(parsed.map(m => [m.id, m])).values());
         }
       } catch (e) { console.error("Error reading archived cache:", e); }
 
@@ -248,7 +251,8 @@ export default function Home() {
         if (str && time) {
           activeCacheTime = parseInt(time, 10);
           if ((Date.now() - activeCacheTime) <= ACTIVE_TTL) {
-            activeMatches = JSON.parse(str) as Match[];
+            const parsed = JSON.parse(str) as Match[];
+            activeMatches = Array.from(new Map(parsed.map(m => [m.id, m])).values());
           }
         }
       } catch (e) { console.error("Error reading active cache:", e); }
@@ -268,7 +272,7 @@ export default function Home() {
 
       // 0 Firestore reads if both caches are fresh
       if (archivedMatches && activeMatches) {
-        const merged = [...archivedMatches, ...activeMatches].sort((a, b) => a.num - b.num);
+        const merged = Array.from(new Map([...archivedMatches, ...activeMatches].map(m => [m.id, m])).values()).sort((a, b) => a.num - b.num);
         setMatches(merged);
         setAdminResults(prev => {
           const drafts: typeof prev = {};
@@ -296,12 +300,23 @@ export default function Home() {
           });
           freshActive.sort((a, b) => a.num - b.num);
 
+          // Move today's finalized matches into archived cache (stable, no need to re-fetch every 5min)
+          const todayFinal = freshActive.filter(m => m.date === todayStr && m.result !== null && m.result.isFinal !== false);
+          const stillActive = freshActive.filter(m => !(m.date === todayStr && m.result !== null && m.result.isFinal !== false));
+          const updatedArchived = Array.from(
+            new Map([...archivedMatches, ...todayFinal].map(m => [m.id, m])).values()
+          ).sort((a, b) => a.num - b.num);
+
           const now = Date.now();
-          localStorage.setItem("polla_active_cache", JSON.stringify(freshActive));
+          if (todayFinal.length > 0) {
+            localStorage.setItem("polla_archived_cache",      JSON.stringify(updatedArchived));
+            localStorage.setItem("polla_archived_cache_time", String(now));
+          }
+          localStorage.setItem("polla_active_cache", JSON.stringify(stillActive));
           localStorage.setItem("polla_active_cache_time", String(now));
           setLastMatchesUpdate(now);
 
-          const merged = [...archivedMatches, ...freshActive].sort((a, b) => a.num - b.num);
+          const merged = Array.from(new Map([...updatedArchived, ...stillActive].map(m => [m.id, m])).values()).sort((a, b) => a.num - b.num);
           setMatches(merged);
           const drafts: typeof adminResults = {};
           merged.forEach(m => {
@@ -324,8 +339,9 @@ export default function Home() {
               : { goals1: "", goals2: "", isFinal: true };
           });
 
-          const archived = all.filter(m => m.date < todayStr);
-          const active   = all.filter(m => m.date >= todayStr);
+          // Archive past days + today's finalized matches (stable)
+          const archived = all.filter(m => m.date < todayStr || (m.date === todayStr && m.result !== null && m.result.isFinal !== false));
+          const active   = all.filter(m => !(m.date < todayStr || (m.date === todayStr && m.result !== null && m.result.isFinal !== false)));
           const now = Date.now();
           localStorage.setItem("polla_archived_cache",      JSON.stringify(archived));
           localStorage.setItem("polla_archived_cache_time", String(now));
@@ -640,8 +656,9 @@ export default function Home() {
           ? { goals1: String(m.result.goals1), goals2: String(m.result.goals2), isFinal: m.result.isFinal ?? true }
           : { goals1: "", goals2: "", isFinal: true };
       });
-      const archived = all.filter(m => m.date < todayStr);
-      const active   = all.filter(m => m.date >= todayStr);
+      // Archive past days + today's finalized matches (stable)
+      const archived = all.filter(m => m.date < todayStr || (m.date === todayStr && m.result !== null && m.result.isFinal !== false));
+      const active   = all.filter(m => !(m.date < todayStr || (m.date === todayStr && m.result !== null && m.result.isFinal !== false)));
       const now = Date.now();
       localStorage.setItem("polla_archived_cache",      JSON.stringify(archived));
       localStorage.setItem("polla_archived_cache_time", String(now));
@@ -908,39 +925,48 @@ export default function Home() {
   }, [filteredMatches, hidePastMatchesAdmin]);
 
   const userGroupedMatches = React.useMemo(() => {
-    const sorted = [...userFilteredMatches].sort((a, b) => {
-      const dateA = getMatchDate(a).getTime();
-      const dateB = getMatchDate(b).getTime();
-      if (dateA !== dateB) {
-        return dateA - dateB;
-      }
-      return a.num - b.num;
+    const past    = userFilteredMatches.filter(m => isMatchPast(m));
+    const upcoming = userFilteredMatches.filter(m => !isMatchPast(m));
+
+    // Past: newest → oldest
+    past.sort((a, b) => {
+      const diff = getMatchDate(b).getTime() - getMatchDate(a).getTime();
+      return diff !== 0 ? diff : b.num - a.num;
     });
 
-    const groups: { [key: string]: Match[] } = {};
-    const groupOrder: string[] = [];
-
-    sorted.forEach((match) => {
-      const matchDate = getMatchDate(match);
-      const label = capitalizeFirstLetter(
-        matchDate.toLocaleDateString(undefined, {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-          year: "numeric"
-        })
-      );
-      if (!groups[label]) {
-        groups[label] = [];
-        groupOrder.push(label);
-      }
-      groups[label].push(match);
+    // Upcoming: oldest → newest
+    upcoming.sort((a, b) => {
+      const diff = getMatchDate(a).getTime() - getMatchDate(b).getTime();
+      return diff !== 0 ? diff : a.num - b.num;
     });
 
-    return groupOrder.map(label => ({
-      dateLabel: label,
-      matches: groups[label]
-    }));
+    const buildGroups = (list: Match[], isPast: boolean) => {
+      const groups: { [key: string]: Match[] } = {};
+      const groupOrder: string[] = [];
+      list.forEach((match) => {
+        const matchDate = getMatchDate(match);
+        const label = capitalizeFirstLetter(
+          matchDate.toLocaleDateString(undefined, {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric"
+          })
+        );
+        if (!groups[label]) {
+          groups[label] = [];
+          groupOrder.push(label);
+        }
+        groups[label].push(match);
+      });
+      return groupOrder.map(label => ({
+        key: `${label}-${isPast ? "past" : "upcoming"}`,
+        dateLabel: label,
+        matches: groups[label]
+      }));
+    };
+
+    return [...buildGroups(past, true), ...buildGroups(upcoming, false)];
   }, [userFilteredMatches]);
 
   const groupedMatches = React.useMemo(() => {
@@ -974,6 +1000,7 @@ export default function Home() {
     });
 
     return groupOrder.map(label => ({
+      key: label,
       dateLabel: label,
       matches: groups[label]
     }));
@@ -1278,7 +1305,7 @@ export default function Home() {
                               : "bg-slate-900/60 text-slate-300 border-slate-800 hover:bg-slate-800"
                             }`}
                         >
-                          👁️ Pasados {pastMatchesCount > 0 && `(${pastMatchesCount})`}
+                          {!hidePastMatches ? "🙈 Ocultar" : `👁️ Pasados (${pastMatchesCount})`}
                         </button>
                       )}
 
@@ -1314,7 +1341,7 @@ export default function Home() {
                       </div>
                     ) : (
                       userGroupedMatches.map((group) => (
-                        <React.Fragment key={group.dateLabel}>
+                        <React.Fragment key={group.key}>
                           {/* Day Header */}
                           <div className="col-span-full mt-6 first:mt-0 mb-2">
                             <div className="flex items-center space-x-3">
@@ -1702,7 +1729,7 @@ export default function Home() {
                                   : "bg-slate-900/60 text-slate-300 border-slate-800 hover:bg-slate-800"
                                 }`}
                             >
-                              👁️ Pasados {pastMatchesCount > 0 && `(${pastMatchesCount})`}
+                              {!hidePastMatchesAdmin ? "🙈 Ocultar" : `👁️ Pasados (${pastMatchesCount})`}
                             </button>
                           )}
                           <select
@@ -1736,7 +1763,7 @@ export default function Home() {
                           </div>
                         ) : (
                           groupedMatches.map((group) => (
-                            <React.Fragment key={group.dateLabel}>
+                            <React.Fragment key={group.key}>
                               {/* Day Header */}
                               <div className="mt-6 first:mt-0 mb-2">
                                 <div className="flex items-center space-x-3">
@@ -1892,7 +1919,7 @@ export default function Home() {
                                     : "bg-slate-900/60 text-slate-300 border-slate-800 hover:bg-slate-800"
                                   }`}
                               >
-                                👁️ Pasados {pastMatchesCount > 0 && `(${pastMatchesCount})`}
+                                {!hidePastMatchesAdmin ? "🙈 Ocultar" : `👁️ Pasados (${pastMatchesCount})`}
                               </button>
                             )}
                             <select
@@ -1934,7 +1961,7 @@ export default function Home() {
                             </div>
                           ) : (
                             groupedMatches.map((group) => (
-                              <React.Fragment key={group.dateLabel}>
+                              <React.Fragment key={group.key}>
                                 {/* Day Header */}
                                 <div className="mt-6 first:mt-0 mb-2">
                                   <div className="flex items-center space-x-3">
