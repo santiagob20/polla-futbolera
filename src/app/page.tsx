@@ -10,6 +10,7 @@ import {
   doc,
   setDoc,
   getDocs,
+  getDoc,
   writeBatch
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -176,6 +177,11 @@ export default function Home() {
   const [adminRecalculating, setAdminRecalculating] = useState(false);
   const [hidePastMatchesAdmin, setHidePastMatchesAdmin] = useState(true);
 
+  // Match sync state
+  const [matchesSyncing, setMatchesSyncing] = useState(false);
+  const [lastMatchesUpdate, setLastMatchesUpdate] = useState<number | null>(null);
+  const [syncCooldown, setSyncCooldown] = useState(0);
+
   // View user predictions modal states
   const [viewingUser, setViewingUser] = useState<UserProfile | null>(null);
   const [viewingUserFilter, setViewingUserFilter] = useState<"started" | "all">("started");
@@ -214,31 +220,128 @@ export default function Home() {
     setPredictions({});
     setPredictionDrafts({});
 
-    // 1. Sync Matches
-    const qMatches = query(collection(db, "matches"), orderBy("num", "asc"));
-    const unsubMatches = onSnapshot(qMatches, (snapshot) => {
-      const list: Match[] = [];
-      const adminDrafts: { [matchId: string]: { goals1: string; goals2: string; isFinal: boolean } } = {};
-      snapshot.forEach((doc) => {
-        const m = doc.data() as Match;
-        list.push({ ...m, id: doc.id });
-        if (m.result) {
-          adminDrafts[doc.id] = {
-            goals1: String(m.result.goals1),
-            goals2: String(m.result.goals2),
-            isFinal: m.result.isFinal ?? true
-          };
-        } else {
-          adminDrafts[doc.id] = {
-            goals1: "",
-            goals2: "",
-            isFinal: true
-          };
+    // 1. Sync Matches (segmented cache: archived 24h TTL, active 5-min TTL)
+    const loadMatches = async () => {
+      const todayStr = (() => {
+        const t = new Date();
+        return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+      })();
+
+      const ARCHIVED_TTL = 24 * 60 * 60 * 1000; // 24h — past days never change
+      const ACTIVE_TTL   =  5 * 60 * 1000;       // 5 min — today's live scores
+
+      let archivedMatches: Match[] | null = null;
+      let activeMatches: Match[]   | null = null;
+      let activeCacheTime: number  | null = null;
+
+      try {
+        const str  = localStorage.getItem("polla_archived_cache");
+        const time = localStorage.getItem("polla_archived_cache_time");
+        if (str && time && (Date.now() - parseInt(time, 10)) <= ARCHIVED_TTL) {
+          archivedMatches = JSON.parse(str) as Match[];
         }
-      });
-      setMatches(list);
-      setAdminResults((prev) => ({ ...adminDrafts, ...prev }));
-    });
+      } catch (e) { console.error("Error reading archived cache:", e); }
+
+      try {
+        const str  = localStorage.getItem("polla_active_cache");
+        const time = localStorage.getItem("polla_active_cache_time");
+        if (str && time) {
+          activeCacheTime = parseInt(time, 10);
+          if ((Date.now() - activeCacheTime) <= ACTIVE_TTL) {
+            activeMatches = JSON.parse(str) as Match[];
+          }
+        }
+      } catch (e) { console.error("Error reading active cache:", e); }
+
+      // Both caches valid → check if admin updated scores since last fetch
+      if (archivedMatches && activeMatches) {
+        try {
+          const versionSnap = await getDoc(doc(db, "meta", "matches_version"));
+          const serverUpdatedAt: number = versionSnap.exists() ? (versionSnap.data().updatedAt ?? 0) : 0;
+          if (serverUpdatedAt > activeCacheTime!) {
+            activeMatches = null; // stale — re-fetch
+          }
+        } catch (e) {
+          console.warn("Could not check matches_version:", e);
+        }
+      }
+
+      // 0 Firestore reads if both caches are fresh
+      if (archivedMatches && activeMatches) {
+        const merged = [...archivedMatches, ...activeMatches].sort((a, b) => a.num - b.num);
+        setMatches(merged);
+        setAdminResults(prev => {
+          const drafts: typeof prev = {};
+          merged.forEach(m => {
+            drafts[m.id] = m.result
+              ? { goals1: String(m.result.goals1), goals2: String(m.result.goals2), isFinal: m.result.isFinal ?? true }
+              : { goals1: "", goals2: "", isFinal: true };
+          });
+          return { ...drafts, ...prev };
+        });
+        setLastMatchesUpdate(activeCacheTime!);
+        return;
+      }
+
+      setMatchesSyncing(true);
+      try {
+        if (archivedMatches) {
+          // Only fetch today + future
+          const qTodayPlus = query(collection(db, "matches"), orderBy("date", "asc"), orderBy("num", "asc"));
+          const snapActive = await getDocs(qTodayPlus);
+          const freshActive: Match[] = [];
+          snapActive.forEach((d) => {
+            const m = d.data() as Match;
+            if (m.date >= todayStr) freshActive.push({ ...m, id: d.id });
+          });
+          freshActive.sort((a, b) => a.num - b.num);
+
+          const now = Date.now();
+          localStorage.setItem("polla_active_cache", JSON.stringify(freshActive));
+          localStorage.setItem("polla_active_cache_time", String(now));
+          setLastMatchesUpdate(now);
+
+          const merged = [...archivedMatches, ...freshActive].sort((a, b) => a.num - b.num);
+          setMatches(merged);
+          const drafts: typeof adminResults = {};
+          merged.forEach(m => {
+            drafts[m.id] = m.result
+              ? { goals1: String(m.result.goals1), goals2: String(m.result.goals2), isFinal: m.result.isFinal ?? true }
+              : { goals1: "", goals2: "", isFinal: true };
+          });
+          setAdminResults(prev => ({ ...drafts, ...prev }));
+        } else {
+          // Full fetch
+          const qAll = query(collection(db, "matches"), orderBy("num", "asc"));
+          const snap = await getDocs(qAll);
+          const all: Match[] = [];
+          const adminDrafts: { [matchId: string]: { goals1: string; goals2: string; isFinal: boolean } } = {};
+          snap.forEach((d) => {
+            const m = d.data() as Match;
+            all.push({ ...m, id: d.id });
+            adminDrafts[d.id] = m.result
+              ? { goals1: String(m.result.goals1), goals2: String(m.result.goals2), isFinal: m.result.isFinal ?? true }
+              : { goals1: "", goals2: "", isFinal: true };
+          });
+
+          const archived = all.filter(m => m.date < todayStr);
+          const active   = all.filter(m => m.date >= todayStr);
+          const now = Date.now();
+          localStorage.setItem("polla_archived_cache",      JSON.stringify(archived));
+          localStorage.setItem("polla_archived_cache_time", String(now));
+          localStorage.setItem("polla_active_cache",        JSON.stringify(active));
+          localStorage.setItem("polla_active_cache_time",   String(now));
+          setLastMatchesUpdate(now);
+          setMatches(all);
+          setAdminResults(prev => ({ ...adminDrafts, ...prev }));
+        }
+      } catch (err) {
+        console.error("Error fetching matches:", err);
+      } finally {
+        setMatchesSyncing(false);
+      }
+    };
+    loadMatches();
 
     // 2. Sync Current User's Predictions
     const qPreds = query(collection(db, "predictions"));
@@ -280,7 +383,6 @@ export default function Home() {
     });
 
     return () => {
-      unsubMatches();
       unsubPreds();
       unsubUsers();
     };
@@ -496,12 +598,63 @@ export default function Home() {
       });
       await userBatch.commit();
 
+      // Notify clients their active cache is stale
+      await setDoc(doc(db, "meta", "matches_version"), { updatedAt: Date.now() }, { merge: true });
+
       alert("Resultado guardado y puntajes recalculados exitosamente.");
     } catch (err) {
       console.error("Error setting match result:", err);
       alert("Error al guardar resultado.");
     } finally {
       setAdminSaving(prev => ({ ...prev, [matchId]: false }));
+    }
+  };
+
+  // Manual force-sync for users (30s cooldown)
+  const forceSyncMatches = async () => {
+    if (matchesSyncing) return;
+    try {
+      const lastSync = localStorage.getItem("polla_last_manual_sync");
+      if (lastSync && (Date.now() - parseInt(lastSync, 10)) < 30000) {
+        const remaining = Math.ceil((30000 - (Date.now() - parseInt(lastSync, 10))) / 1000);
+        alert(`Por favor espera ${remaining} segundos antes de sincronizar nuevamente.`);
+        return;
+      }
+    } catch (e) { /* ignore */ }
+
+    const todayStr = (() => {
+      const t = new Date();
+      return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+    })();
+
+    setMatchesSyncing(true);
+    try {
+      const qAll = query(collection(db, "matches"), orderBy("num", "asc"));
+      const snap = await getDocs(qAll);
+      const all: Match[] = [];
+      const adminDrafts: { [id: string]: { goals1: string; goals2: string; isFinal: boolean } } = {};
+      snap.forEach((d) => {
+        const m = d.data() as Match;
+        all.push({ ...m, id: d.id });
+        adminDrafts[d.id] = m.result
+          ? { goals1: String(m.result.goals1), goals2: String(m.result.goals2), isFinal: m.result.isFinal ?? true }
+          : { goals1: "", goals2: "", isFinal: true };
+      });
+      const archived = all.filter(m => m.date < todayStr);
+      const active   = all.filter(m => m.date >= todayStr);
+      const now = Date.now();
+      localStorage.setItem("polla_archived_cache",      JSON.stringify(archived));
+      localStorage.setItem("polla_archived_cache_time", String(now));
+      localStorage.setItem("polla_active_cache",        JSON.stringify(active));
+      localStorage.setItem("polla_active_cache_time",   String(now));
+      localStorage.setItem("polla_last_manual_sync",    String(now));
+      setMatches(all);
+      setAdminResults(prev => ({ ...adminDrafts, ...prev }));
+      setLastMatchesUpdate(now);
+    } catch (err) {
+      console.error("Error force-syncing matches:", err);
+    } finally {
+      setMatchesSyncing(false);
     }
   };
 
