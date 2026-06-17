@@ -195,6 +195,7 @@ export default function Home() {
   const [matchesSyncing, setMatchesSyncing] = useState(false);
   const [lastMatchesUpdate, setLastMatchesUpdate] = useState<number | null>(null);
   const [syncCooldown, setSyncCooldown] = useState(0);
+  const [refreshingMatches, setRefreshingMatches] = useState<{ [matchId: string]: boolean }>({});
 
   // View user predictions modal states
   const [viewingUser, setViewingUser] = useState<UserProfile | null>(null);
@@ -642,6 +643,70 @@ export default function Home() {
       alert("Error al guardar resultado.");
     } finally {
       setAdminSaving(prev => ({ ...prev, [matchId]: false }));
+    }
+  };
+
+  // Refresh live match score by matchId (to save Firestore reads)
+  const refreshLiveMatchScore = async (matchId: string) => {
+    if (refreshingMatches[matchId]) return;
+    setRefreshingMatches(prev => ({ ...prev, [matchId]: true }));
+    try {
+      const matchSnap = await getDoc(doc(db, "matches", matchId));
+      if (matchSnap.exists()) {
+        const freshMatchData = { ...matchSnap.data(), id: matchSnap.id } as Match;
+
+        // 1. Update React state
+        setMatches(prevMatches =>
+          prevMatches.map(m => (m.id === matchId ? freshMatchData : m))
+        );
+
+        // 2. Sync local storage caches to keep client in sync
+        try {
+          const archivedStr = localStorage.getItem("polla_archived_cache");
+          const activeStr = localStorage.getItem("polla_active_cache");
+          const todayStr = (() => {
+            const t = new Date();
+            return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+          })();
+
+          const isFinal = freshMatchData.result !== null && freshMatchData.result.isFinal !== false;
+          const isArchived = freshMatchData.date < todayStr || (freshMatchData.date === todayStr && isFinal);
+
+          if (archivedStr) {
+            let archived = JSON.parse(archivedStr) as Match[];
+            if (isArchived) {
+              if (archived.some(m => m.id === matchId)) {
+                archived = archived.map(m => (m.id === matchId ? freshMatchData : m));
+              } else {
+                archived.push(freshMatchData);
+              }
+            } else {
+              archived = archived.filter(m => m.id !== matchId);
+            }
+            localStorage.setItem("polla_archived_cache", JSON.stringify(archived));
+          }
+
+          if (activeStr) {
+            let active = JSON.parse(activeStr) as Match[];
+            if (!isArchived) {
+              if (active.some(m => m.id === matchId)) {
+                active = active.map(m => (m.id === matchId ? freshMatchData : m));
+              } else {
+                active.push(freshMatchData);
+              }
+            } else {
+              active = active.filter(m => m.id !== matchId);
+            }
+            localStorage.setItem("polla_active_cache", JSON.stringify(active));
+          }
+        } catch (e) {
+          console.error("Error updating local storage cache for single match:", e);
+        }
+      }
+    } catch (err) {
+      console.error("Error refreshing match score:", err);
+    } finally {
+      setRefreshingMatches(prev => ({ ...prev, [matchId]: false }));
     }
   };
 
@@ -1585,9 +1650,31 @@ export default function Home() {
 
                                       return (
                                         <div className="flex items-center space-x-2 shrink-0">
-                                          <span className="text-xs bg-slate-950 border border-slate-800 text-slate-350 px-2.5 py-1 rounded-lg font-bold whitespace-nowrap">
-                                            En Vivo: <span className="text-amber-400">{liveGoals1} - {liveGoals2}</span>
-                                          </span>
+                                          <div className="flex items-center bg-slate-955 border border-slate-800 rounded-lg overflow-hidden whitespace-nowrap">
+                                            <span className="text-xs text-slate-350 px-2.5 py-1 font-bold">
+                                              En Vivo: <span className="text-amber-400">{liveGoals1} - {liveGoals2}</span>
+                                            </span>
+                                            <button
+                                              onClick={() => refreshLiveMatchScore(match.id)}
+                                              disabled={refreshingMatches[match.id]}
+                                              title="Actualizar marcador en vivo"
+                                              className="border-l border-slate-800 bg-slate-950 hover:bg-slate-900/80 text-amber-400 hover:text-amber-300 p-1.5 transition-all active:scale-[0.9] disabled:opacity-50 flex items-center justify-center"
+                                            >
+                                              <svg
+                                                className={`w-3.5 h-3.5 ${refreshingMatches[match.id] ? "animate-spin text-amber-500" : ""}`}
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="2.5"
+                                                viewBox="0 0 24 24"
+                                              >
+                                                <path
+                                                  strokeLinecap="round"
+                                                  strokeLinejoin="round"
+                                                  d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+                                                />
+                                              </svg>
+                                            </button>
+                                          </div>
                                           {pred ? (
                                             <span className={`text-xs font-bold px-2 py-1 rounded-lg whitespace-nowrap ${getPointsBadgeClass(currentPoints, match.date < "2026-06-13")}`}>
                                               +{currentPoints} Pts (Prov.)
@@ -2462,9 +2549,31 @@ export default function Home() {
                             const liveGoals1 = match.result ? match.result.goals1 : 0;
                             const liveGoals2 = match.result ? match.result.goals2 : 0;
                             return (
-                              <span className="text-[11px] bg-slate-900/60 border border-slate-800 text-slate-300 px-2 py-1 rounded-lg font-bold">
-                                En Vivo: {liveGoals1} - {liveGoals2}
-                              </span>
+                              <div className="flex items-center space-x-1.5 bg-slate-900/60 border border-slate-800 rounded-lg overflow-hidden">
+                                <span className="text-[11px] text-slate-300 px-2 py-1 font-bold">
+                                  En Vivo: <span className="text-amber-400">{liveGoals1} - {liveGoals2}</span>
+                                </span>
+                                <button
+                                  onClick={() => refreshLiveMatchScore(match.id)}
+                                  disabled={refreshingMatches[match.id]}
+                                  title="Actualizar marcador en vivo"
+                                  className="border-l border-slate-800 bg-slate-900/40 hover:bg-slate-800 text-amber-400 hover:text-amber-300 p-1.5 transition-all active:scale-[0.9] disabled:opacity-50 flex items-center justify-center"
+                                >
+                                  <svg
+                                    className={`w-3 h-3 ${refreshingMatches[match.id] ? "animate-spin text-amber-500" : ""}`}
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2.5"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+                                    />
+                                  </svg>
+                                </button>
+                              </div>
                             );
                           }
 
