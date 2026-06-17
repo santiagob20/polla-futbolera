@@ -246,7 +246,8 @@ export default function Home() {
 
       let archivedMatches: Match[] | null = null;
       let activeMatches: Match[]   | null = null;
-      let activeCacheTime: number  | null = null;
+      let archivedCacheTime = 0;
+      let activeCacheTime = 0;
 
       try {
         const str  = localStorage.getItem("polla_archived_cache");
@@ -254,6 +255,7 @@ export default function Home() {
         if (str && time && (Date.now() - parseInt(time, 10)) <= ARCHIVED_TTL) {
           const parsed = JSON.parse(str) as Match[];
           archivedMatches = Array.from(new Map(parsed.map(m => [m.id, m])).values());
+          archivedCacheTime = parseInt(time, 10);
         }
       } catch (e) { console.error("Error reading archived cache:", e); }
 
@@ -261,28 +263,33 @@ export default function Home() {
         const str  = localStorage.getItem("polla_active_cache");
         const time = localStorage.getItem("polla_active_cache_time");
         if (str && time) {
-          activeCacheTime = parseInt(time, 10);
-          if ((Date.now() - activeCacheTime) <= ACTIVE_TTL) {
+          const parsedTime = parseInt(time, 10);
+          if ((Date.now() - parsedTime) <= ACTIVE_TTL) {
             const parsed = JSON.parse(str) as Match[];
             activeMatches = Array.from(new Map(parsed.map(m => [m.id, m])).values());
+            activeCacheTime = parsedTime;
           }
         }
       } catch (e) { console.error("Error reading active cache:", e); }
 
-      // Both caches valid → check if admin updated scores since last fetch
-      if (archivedMatches && activeMatches) {
+      // Check server version if we have cached data
+      if (archivedMatches || activeMatches) {
         try {
           const versionSnap = await getDoc(doc(db, "meta", "matches_version"));
           const serverUpdatedAt: number = versionSnap.exists() ? (versionSnap.data().updatedAt ?? 0) : 0;
-          if (serverUpdatedAt > activeCacheTime!) {
-            activeMatches = null; // stale — re-fetch
+          
+          if (archivedMatches && archivedCacheTime < serverUpdatedAt) {
+            archivedMatches = null; // Stale archived matches
+          }
+          if (activeMatches && activeCacheTime < serverUpdatedAt) {
+            activeMatches = null; // Stale active matches
           }
         } catch (e) {
           console.warn("Could not check matches_version:", e);
         }
       }
 
-      // 0 Firestore reads if both caches are fresh
+      // If both caches are valid (either initially or after version check)
       if (archivedMatches && activeMatches) {
         const merged = Array.from(new Map([...archivedMatches, ...activeMatches].map(m => [m.id, m])).values()).sort((a, b) => a.num - b.num);
         setMatches(merged);
@@ -295,7 +302,7 @@ export default function Home() {
           });
           return { ...drafts, ...prev };
         });
-        setLastMatchesUpdate(activeCacheTime!);
+        setLastMatchesUpdate(activeCacheTime);
         return;
       }
 
