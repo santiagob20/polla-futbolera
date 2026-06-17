@@ -171,13 +171,25 @@ export default function Home() {
   // Admin inputs
   const [adminResults, setAdminResults] = useState<{ [matchId: string]: { goals1: string; goals2: string; isFinal: boolean } }>({});
   const [adminSaving, setAdminSaving] = useState<{ [matchId: string]: boolean }>({});
-  const [adminSubTab, setAdminSubTab] = useState<"results" | "predictions">("results");
+  const [adminSubTab, setAdminSubTab] = useState<"results" | "predictions" | "users">("results");
   const [adminSelectedUserId, setAdminSelectedUserId] = useState<string>("");
   const [adminUserPredictions, setAdminUserPredictions] = useState<{ [matchId: string]: Prediction }>({});
   const [adminUserDrafts, setAdminUserDrafts] = useState<{ [matchId: string]: { goals1: string; goals2: string } }>({});
   const [adminSavingUserPreds, setAdminSavingUserPreds] = useState<{ [matchId: string]: boolean }>({});
   const [adminRecalculating, setAdminRecalculating] = useState(false);
   const [hidePastMatchesAdmin, setHidePastMatchesAdmin] = useState(true);
+
+  // User Management State
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  const [editUserDraft, setEditUserDraft] = useState<{
+    displayName: string;
+    email: string;
+    points: string;
+    previousPoints: string;
+    isAdmin: boolean;
+  } | null>(null);
+  const [adminDeletingUser, setAdminDeletingUser] = useState<{ [uid: string]: boolean }>({});
+  const [adminSavingUser, setAdminSavingUser] = useState(false);
 
   // Match sync state
   const [matchesSyncing, setMatchesSyncing] = useState(false);
@@ -737,6 +749,78 @@ export default function Home() {
       alert("Error al recalcular todos los puntajes en Firestore.");
     } finally {
       setAdminRecalculating(false);
+    }
+  };
+
+  const deleteUserByAdmin = async (uid: string, displayName: string) => {
+    if (!user || !profile?.isAdmin) return;
+    const confirmDelete = window.confirm(`¿Estás seguro de que deseas eliminar permanentemente a "${displayName}" y todos sus pronósticos? Esta acción no se puede deshacer.`);
+    if (!confirmDelete) return;
+
+    setAdminDeletingUser(prev => ({ ...prev, [uid]: true }));
+    try {
+      // 1. Fetch all predictions
+      const predsSnap = await getDocs(collection(db, "predictions"));
+      const batch = writeBatch(db);
+
+      let deleteCount = 0;
+      predsSnap.forEach((pDoc) => {
+        const pred = pDoc.data() as Prediction;
+        if (pred.userId === uid) {
+          batch.delete(doc(db, "predictions", pDoc.id));
+          deleteCount++;
+        }
+      });
+
+      // 2. Delete user doc
+      batch.delete(doc(db, "users", uid));
+
+      // 3. Commit
+      await batch.commit();
+      alert(`El usuario "${displayName}" ha sido eliminado exitosamente junto con sus ${deleteCount} pronósticos.`);
+    } catch (err) {
+      console.error("Error deleting user:", err);
+      alert("Error al eliminar el usuario y sus pronósticos.");
+    } finally {
+      setAdminDeletingUser(prev => ({ ...prev, [uid]: false }));
+    }
+  };
+
+  const saveUserEditByAdmin = async () => {
+    if (!user || !profile?.isAdmin || !editingUser || !editUserDraft) return;
+
+    const { displayName, email, points, previousPoints, isAdmin } = editUserDraft;
+    if (!displayName.trim() || !email.trim()) {
+      alert("El nombre y el correo son obligatorios.");
+      return;
+    }
+
+    const pts = parseInt(points);
+    const prevPts = parseInt(previousPoints);
+    if (isNaN(pts) || isNaN(prevPts)) {
+      alert("Los puntos deben ser valores numéricos.");
+      return;
+    }
+
+    setAdminSavingUser(true);
+    try {
+      const userRef = doc(db, "users", editingUser.uid);
+      await setDoc(userRef, {
+        displayName: displayName.trim(),
+        email: email.trim(),
+        points: pts,
+        previousPoints: prevPts,
+        isAdmin: isAdmin
+      }, { merge: true });
+
+      alert("Datos del usuario actualizados exitosamente.");
+      setEditingUser(null);
+      setEditUserDraft(null);
+    } catch (err) {
+      console.error("Error updating user:", err);
+      alert("Error al actualizar la información del usuario.");
+    } finally {
+      setAdminSavingUser(false);
     }
   };
 
@@ -1708,6 +1792,15 @@ export default function Home() {
                       >
                         👤 Pronósticos de Jugadores
                       </button>
+                      <button
+                        onClick={() => setAdminSubTab("users")}
+                        className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all border ${adminSubTab === "users"
+                            ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
+                            : "bg-slate-950/40 border-slate-900 text-slate-400 hover:text-slate-200"
+                          }`}
+                      >
+                        👥 Gestionar Usuarios
+                      </button>
                     </div>
                   </div>
 
@@ -2086,6 +2179,99 @@ export default function Home() {
                       )}
                     </div>
                   )}
+
+                  {/* Sub-Tab 3: User Management */}
+                  {adminSubTab === "users" && (
+                    <div className="space-y-6">
+                      <div className="bg-slate-900/40 border border-slate-900 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div>
+                          <h3 className="font-bold text-slate-200 text-sm">Gestionar Usuarios</h3>
+                          <p className="text-slate-400 text-[10px]">Edita la información de los jugadores o elimínalos del torneo</p>
+                        </div>
+                        <div className="text-xs text-slate-400 font-bold bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
+                          Total Jugadores: <span className="text-amber-400">{leaderboard.length}</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {leaderboard.map((uProf) => {
+                          const isSelf = uProf.uid === user?.uid;
+                          const totalPoints = uProf.points + (uProf.previousPoints || 0);
+                          const isDeleting = adminDeletingUser[uProf.uid];
+
+                          return (
+                            <div 
+                              key={uProf.uid}
+                              className="bg-slate-900/30 hover:bg-slate-900/50 transition-all border border-slate-900/80 hover:border-slate-850 rounded-2xl p-5 flex flex-col justify-between space-y-4"
+                            >
+                              {/* Header Profile Info */}
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-center space-x-3 min-w-0">
+                                  {/* Avatar circle */}
+                                  <div className="w-10 h-10 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center font-black text-amber-400 uppercase text-sm shrink-0">
+                                    {uProf.displayName ? uProf.displayName.slice(0, 2) : "U"}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <h4 className="font-bold text-slate-200 text-sm flex items-center gap-1.5 truncate">
+                                      <span>{uProf.displayName}</span>
+                                      {uProf.isAdmin && (
+                                        <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded-md text-[9px] font-black tracking-wide shrink-0">
+                                          ADMIN
+                                        </span>
+                                      )}
+                                    </h4>
+                                    <p className="text-[11px] text-slate-400 truncate">{uProf.email}</p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Points Breakdown */}
+                              <div className="bg-slate-950/40 border border-slate-900/60 rounded-xl p-3 grid grid-cols-3 gap-2 text-center text-xs">
+                                <div>
+                                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Nueva</p>
+                                  <p className="font-extrabold text-amber-500">{uProf.points} Pts</p>
+                                </div>
+                                <div className="border-x border-slate-900">
+                                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Ant.</p>
+                                  <p className="font-extrabold text-slate-400">{uProf.previousPoints || 0} Pts</p>
+                                </div>
+                                <div>
+                                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Total</p>
+                                  <p className="font-black text-slate-200">{totalPoints} Pts</p>
+                                </div>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div className="flex gap-2 pt-2">
+                                <button
+                                  onClick={() => {
+                                    setEditingUser(uProf);
+                                    setEditUserDraft({
+                                      displayName: uProf.displayName,
+                                      email: uProf.email,
+                                      points: String(uProf.points),
+                                      previousPoints: String(uProf.previousPoints || 0),
+                                      isAdmin: !!uProf.isAdmin
+                                    });
+                                  }}
+                                  className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 hover:bg-slate-900/80 text-slate-300 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5"
+                                >
+                                  ✏️ Editar
+                                </button>
+                                <button
+                                  onClick={() => deleteUserByAdmin(uProf.uid, uProf.displayName)}
+                                  disabled={isSelf || isDeleting}
+                                  className="flex-1 px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/15 disabled:opacity-40 disabled:hover:bg-rose-500/10 disabled:hover:text-rose-400 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5"
+                                >
+                                  {isDeleting ? "Eliminando..." : "🗑️ Eliminar"}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -2359,6 +2545,119 @@ export default function Home() {
                 className="px-5 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-200 font-bold rounded-xl text-xs transition-all active:scale-[0.98]"
               >
                 Cerrar
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edición de Usuario por el Administrador */}
+      {editingUser && editUserDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h2 className="text-lg font-black text-slate-100 flex items-center gap-2">
+                <span>👤</span>
+                <span>Editar Usuario</span>
+              </h2>
+              <button 
+                onClick={() => {
+                  setEditingUser(null);
+                  setEditUserDraft(null);
+                }}
+                className="text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 w-8 h-8 rounded-full flex items-center justify-center transition-colors font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body / Inputs */}
+            <div className="space-y-3.5 pt-2">
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">Nombre Completo</label>
+                <input 
+                  type="text"
+                  value={editUserDraft.displayName}
+                  onChange={(e) => setEditUserDraft(prev => ({ ...prev!, displayName: e.target.value }))}
+                  className="w-full h-11 px-4 bg-slate-950 border border-slate-800 focus:border-amber-500 text-sm rounded-xl focus:outline-none text-slate-200 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">Correo Electrónico</label>
+                <input 
+                  type="email"
+                  value={editUserDraft.email}
+                  onChange={(e) => setEditUserDraft(prev => ({ ...prev!, email: e.target.value }))}
+                  className="w-full h-11 px-4 bg-slate-950 border border-slate-800 focus:border-amber-500 text-sm rounded-xl focus:outline-none text-slate-200 font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">Pts Fase Nueva</label>
+                  <input 
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={editUserDraft.points}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, "");
+                      setEditUserDraft(prev => ({ ...prev!, points: val }));
+                    }}
+                    className="w-full h-11 px-4 bg-slate-950 border border-slate-800 focus:border-amber-500 text-sm rounded-xl focus:outline-none text-slate-200 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">Pts Fase Anterior</label>
+                  <input 
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={editUserDraft.previousPoints}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, "");
+                      setEditUserDraft(prev => ({ ...prev!, previousPoints: val }));
+                    }}
+                    className="w-full h-11 px-4 bg-slate-950 border border-slate-800 focus:border-amber-500 text-sm rounded-xl focus:outline-none text-slate-200 font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 bg-slate-950 border border-slate-800 p-4 rounded-xl mt-4">
+                <input 
+                  type="checkbox"
+                  id="isAdminCheckbox"
+                  checked={editUserDraft.isAdmin}
+                  onChange={(e) => setEditUserDraft(prev => ({ ...prev!, isAdmin: e.target.checked }))}
+                  className="w-4.5 h-4.5 accent-amber-500 rounded bg-slate-900 border-slate-800 cursor-pointer"
+                />
+                <label htmlFor="isAdminCheckbox" className="text-xs font-bold text-slate-300 cursor-pointer select-none">
+                  Otorgar permisos de Administrador
+                </label>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex gap-3 pt-4 border-t border-slate-800/80">
+              <button
+                onClick={() => {
+                  setEditingUser(null);
+                  setEditUserDraft(null);
+                }}
+                className="flex-1 h-11 bg-slate-950 border border-slate-800 hover:bg-slate-900/80 text-slate-300 font-bold text-xs rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={saveUserEditByAdmin}
+                disabled={adminSavingUser || !editUserDraft.displayName.trim() || !editUserDraft.email.trim()}
+                className="flex-1 h-11 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-extrabold text-xs rounded-xl transition-all shadow-lg shadow-amber-500/15"
+              >
+                {adminSavingUser ? "Guardando..." : "Guardar Cambios"}
               </button>
             </div>
 
