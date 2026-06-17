@@ -1561,40 +1561,90 @@ export default function Home() {
                                   </div>
 
                                   {/* Prediction / Score inputs */}
-                                  <div className="flex items-center space-x-2 shrink-0">
-                                    <input
-                                      type="text"
-                                      inputMode="numeric"
-                                      pattern="[0-9]*"
-                                      value={draft.goals1}
-                                      disabled={hasResult || isSaving || hasMatchStarted(match)}
-                                      onChange={(e) => {
-                                        const val = e.target.value.replace(/[^0-9]/g, "");
-                                        setPredictionDrafts(prev => ({
-                                          ...prev,
-                                          [match.id]: { ...draft, goals1: val }
-                                        }));
-                                      }}
-                                      className="w-12 h-12 text-center bg-slate-950 border border-slate-800 focus:border-amber-500 text-lg font-extrabold rounded-xl focus:outline-none disabled:opacity-60 disabled:bg-slate-900/30 text-amber-400"
-                                      placeholder="-"
-                                    />
-                                    <span className="text-slate-655 font-bold">vs</span>
-                                    <input
-                                      type="text"
-                                      inputMode="numeric"
-                                      pattern="[0-9]*"
-                                      value={draft.goals2}
-                                      disabled={hasResult || isSaving || hasMatchStarted(match)}
-                                      onChange={(e) => {
-                                        const val = e.target.value.replace(/[^0-9]/g, "");
-                                        setPredictionDrafts(prev => ({
-                                          ...prev,
-                                          [match.id]: { ...draft, goals2: val }
-                                        }));
-                                      }}
-                                      className="w-12 h-12 text-center bg-slate-950 border border-slate-800 focus:border-amber-500 text-lg font-extrabold rounded-xl focus:outline-none disabled:opacity-60 disabled:bg-slate-900/30 text-amber-400"
-                                      placeholder="-"
-                                    />
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {/* goals1 stepper */}
+                                    <div className="flex flex-col sm:flex-row items-center gap-1">
+                                      {!hasMatchStarted(match) && (
+                                        <button
+                                          type="button"
+                                          disabled={isSaving}
+                                          onClick={() => {
+                                            const current = draft.goals1 === "" ? -1 : parseInt(draft.goals1, 10);
+                                            const newVal = (isNaN(current) ? -1 : current) + 1;
+                                            setPredictionDrafts(prev => ({ ...prev, [match.id]: { ...draft, goals1: String(newVal) } }));
+                                          }}
+                                          className="w-7 h-7 flex items-center justify-center bg-slate-900 border border-slate-800 hover:border-amber-500/40 hover:text-amber-400 text-slate-400 font-extrabold text-sm rounded-lg transition-all active:scale-90 disabled:opacity-30 select-none cursor-pointer order-1 sm:order-3"
+                                        >+</button>
+                                      )}
+                                      <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
+                                        value={draft.goals1}
+                                        disabled={hasResult || isSaving || hasMatchStarted(match)}
+                                        onChange={(e) => {
+                                          const val = e.target.value.replace(/[^0-9]/g, "");
+                                          setPredictionDrafts(prev => ({ ...prev, [match.id]: { ...draft, goals1: val } }));
+                                        }}
+                                        className="w-10 h-10 text-center bg-slate-950 border border-slate-800 focus:border-amber-500 text-base font-extrabold rounded-xl focus:outline-none disabled:opacity-60 disabled:bg-slate-900/30 text-amber-400 order-2"
+                                        placeholder="-"
+                                      />
+                                      {!hasMatchStarted(match) && (
+                                        <button
+                                          type="button"
+                                          disabled={isSaving}
+                                          onClick={() => {
+                                            const current = draft.goals1 === "" ? 0 : parseInt(draft.goals1, 10);
+                                            const newVal = Math.max(0, isNaN(current) ? 0 : current - 1);
+                                            setPredictionDrafts(prev => ({ ...prev, [match.id]: { ...draft, goals1: String(newVal) } }));
+                                          }}
+                                          className="w-7 h-7 flex items-center justify-center bg-slate-900 border border-slate-800 hover:border-amber-500/40 hover:text-amber-400 text-slate-400 font-extrabold text-sm rounded-lg transition-all active:scale-90 disabled:opacity-30 select-none cursor-pointer order-3 sm:order-1"
+                                        >-</button>
+                                      )}
+                                    </div>
+
+                                    <span className="text-slate-600 font-bold">vs</span>
+
+                                    {/* goals2 stepper */}
+                                    <div className="flex flex-col sm:flex-row items-center gap-1">
+                                      {!hasMatchStarted(match) && (
+                                        <button
+                                          type="button"
+                                          disabled={isSaving}
+                                          onClick={() => {
+                                            const current = draft.goals2 === "" ? -1 : parseInt(draft.goals2, 10);
+                                            const newVal = (isNaN(current) ? -1 : current) + 1;
+                                            setPredictionDrafts(prev => ({ ...prev, [match.id]: { ...draft, goals2: String(newVal) } }));
+                                          }}
+                                          className="w-7 h-7 flex items-center justify-center bg-slate-900 border border-slate-800 hover:border-amber-500/40 hover:text-amber-400 text-slate-400 font-extrabold text-sm rounded-lg transition-all active:scale-90 disabled:opacity-30 select-none cursor-pointer order-1 sm:order-3"
+                                        >+</button>
+                                      )}
+                                      <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
+                                        value={draft.goals2}
+                                        disabled={hasResult || isSaving || hasMatchStarted(match)}
+                                        onChange={(e) => {
+                                          const val = e.target.value.replace(/[^0-9]/g, "");
+                                          setPredictionDrafts(prev => ({ ...prev, [match.id]: { ...draft, goals2: val } }));
+                                        }}
+                                        className="w-10 h-10 text-center bg-slate-950 border border-slate-800 focus:border-amber-500 text-base font-extrabold rounded-xl focus:outline-none disabled:opacity-60 disabled:bg-slate-900/30 text-amber-400 order-2"
+                                        placeholder="-"
+                                      />
+                                      {!hasMatchStarted(match) && (
+                                        <button
+                                          type="button"
+                                          disabled={isSaving}
+                                          onClick={() => {
+                                            const current = draft.goals2 === "" ? 0 : parseInt(draft.goals2, 10);
+                                            const newVal = Math.max(0, isNaN(current) ? 0 : current - 1);
+                                            setPredictionDrafts(prev => ({ ...prev, [match.id]: { ...draft, goals2: String(newVal) } }));
+                                          }}
+                                          className="w-7 h-7 flex items-center justify-center bg-slate-900 border border-slate-800 hover:border-amber-500/40 hover:text-amber-400 text-slate-400 font-extrabold text-sm rounded-lg transition-all active:scale-90 disabled:opacity-30 select-none cursor-pointer order-3 sm:order-1"
+                                        >-</button>
+                                      )}
+                                    </div>
                                   </div>
 
                                   {/* Team 2 */}
@@ -2003,38 +2053,80 @@ export default function Home() {
                                         <span className="text-[10px] text-slate-500">{match.ground} • {localTimeStr} {tzAbbr}</span>
                                       </div>
 
-                                      <div className="flex items-center space-x-3">
-                                        <input
-                                          type="text"
-                                          inputMode="numeric"
-                                          pattern="[0-9]*"
-                                          value={draft.goals1}
-                                          onChange={(e) => {
-                                            const val = e.target.value.replace(/[^0-9]/g, "");
-                                            setAdminResults(prev => ({
-                                              ...prev,
-                                              [match.id]: { ...draft, goals1: val }
-                                            }));
-                                          }}
-                                          className="w-12 h-10 text-center bg-slate-950 border border-slate-800 focus:border-amber-500 text-md font-bold rounded-lg focus:outline-none text-amber-400"
-                                          placeholder={match.result ? String(match.result.goals1) : "-"}
-                                        />
-                                        <span className="text-slate-650 font-bold">vs</span>
-                                        <input
-                                          type="text"
-                                          inputMode="numeric"
-                                          pattern="[0-9]*"
-                                          value={draft.goals2}
-                                          onChange={(e) => {
-                                            const val = e.target.value.replace(/[^0-9]/g, "");
-                                            setAdminResults(prev => ({
-                                              ...prev,
-                                              [match.id]: { ...draft, goals2: val }
-                                            }));
-                                          }}
-                                          className="w-12 h-10 text-center bg-slate-950 border border-slate-800 focus:border-amber-500 text-md font-bold rounded-lg focus:outline-none text-amber-400"
-                                          placeholder={match.result ? String(match.result.goals2) : "-"}
-                                        />
+                                      <div className="flex items-center gap-3">
+                                        {/* goals1 stepper */}
+                                        <div className="flex flex-col sm:flex-row items-center gap-1">
+                                          <button
+                                            type="button"
+                                            disabled={isSaving}
+                                            onClick={() => {
+                                              const current = draft.goals1 === "" ? -1 : parseInt(draft.goals1, 10);
+                                              const newVal = (isNaN(current) ? -1 : current) + 1;
+                                              setAdminResults(prev => ({ ...prev, [match.id]: { ...draft, goals1: String(newVal) } }));
+                                            }}
+                                            className="w-7 h-7 flex items-center justify-center bg-slate-900 border border-slate-800 hover:border-amber-500/40 hover:text-amber-400 text-slate-400 font-extrabold text-sm rounded-lg transition-all active:scale-90 disabled:opacity-30 select-none cursor-pointer order-1 sm:order-3"
+                                          >+</button>
+                                          <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            value={draft.goals1}
+                                            onChange={(e) => {
+                                              const val = e.target.value.replace(/[^0-9]/g, "");
+                                              setAdminResults(prev => ({ ...prev, [match.id]: { ...draft, goals1: val } }));
+                                            }}
+                                            className="w-10 h-10 text-center bg-slate-950 border border-slate-800 focus:border-amber-500 text-base font-bold rounded-lg focus:outline-none text-amber-400 order-2"
+                                            placeholder={match.result ? String(match.result.goals1) : "-"}
+                                          />
+                                          <button
+                                            type="button"
+                                            disabled={isSaving}
+                                            onClick={() => {
+                                              const current = draft.goals1 === "" ? 0 : parseInt(draft.goals1, 10);
+                                              const newVal = Math.max(0, isNaN(current) ? 0 : current - 1);
+                                              setAdminResults(prev => ({ ...prev, [match.id]: { ...draft, goals1: String(newVal) } }));
+                                            }}
+                                            className="w-7 h-7 flex items-center justify-center bg-slate-900 border border-slate-800 hover:border-amber-500/40 hover:text-amber-400 text-slate-400 font-extrabold text-sm rounded-lg transition-all active:scale-90 disabled:opacity-30 select-none cursor-pointer order-3 sm:order-1"
+                                          >-</button>
+                                        </div>
+
+                                        <span className="text-slate-600 font-bold">vs</span>
+
+                                        {/* goals2 stepper */}
+                                        <div className="flex flex-col sm:flex-row items-center gap-1">
+                                          <button
+                                            type="button"
+                                            disabled={isSaving}
+                                            onClick={() => {
+                                              const current = draft.goals2 === "" ? -1 : parseInt(draft.goals2, 10);
+                                              const newVal = (isNaN(current) ? -1 : current) + 1;
+                                              setAdminResults(prev => ({ ...prev, [match.id]: { ...draft, goals2: String(newVal) } }));
+                                            }}
+                                            className="w-7 h-7 flex items-center justify-center bg-slate-900 border border-slate-800 hover:border-amber-500/40 hover:text-amber-400 text-slate-400 font-extrabold text-sm rounded-lg transition-all active:scale-90 disabled:opacity-30 select-none cursor-pointer order-1 sm:order-3"
+                                          >+</button>
+                                          <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            value={draft.goals2}
+                                            onChange={(e) => {
+                                              const val = e.target.value.replace(/[^0-9]/g, "");
+                                              setAdminResults(prev => ({ ...prev, [match.id]: { ...draft, goals2: val } }));
+                                            }}
+                                            className="w-10 h-10 text-center bg-slate-950 border border-slate-800 focus:border-amber-500 text-base font-bold rounded-lg focus:outline-none text-amber-400 order-2"
+                                            placeholder={match.result ? String(match.result.goals2) : "-"}
+                                          />
+                                          <button
+                                            type="button"
+                                            disabled={isSaving}
+                                            onClick={() => {
+                                              const current = draft.goals2 === "" ? 0 : parseInt(draft.goals2, 10);
+                                              const newVal = Math.max(0, isNaN(current) ? 0 : current - 1);
+                                              setAdminResults(prev => ({ ...prev, [match.id]: { ...draft, goals2: String(newVal) } }));
+                                            }}
+                                            className="w-7 h-7 flex items-center justify-center bg-slate-900 border border-slate-800 hover:border-amber-500/40 hover:text-amber-400 text-slate-400 font-extrabold text-sm rounded-lg transition-all active:scale-90 disabled:opacity-30 select-none cursor-pointer order-3 sm:order-1"
+                                          >-</button>
+                                        </div>
 
                                         <label className="flex items-center space-x-1.5 cursor-pointer select-none text-xs text-slate-300">
                                           <input
