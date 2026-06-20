@@ -201,6 +201,9 @@ export default function Home() {
   const [viewingUser, setViewingUser] = useState<UserProfile | null>(null);
   const [viewingUserFilter, setViewingUserFilter] = useState<"started" | "all">("started");
 
+  // View team history modal states
+  const [selectedTeamHistory, setSelectedTeamHistory] = useState<string | null>(null);
+
   // Auth Handler
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1547,18 +1550,29 @@ export default function Home() {
                                 {/* Teams and Inputs */}
                                 <div className="flex items-center justify-between gap-3 my-4">
                                   {/* Team 1 */}
-                                  <div className="flex-1 flex flex-col items-center justify-center space-y-1.5 min-w-0">
-                                    {getFlagUrl(match.team1) && (
+                                  {getFlagUrl(match.team1) ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedTeamHistory(match.team1)}
+                                      title={`Ver historial de partidos de ${match.team1}`}
+                                      className="flex-1 flex flex-col items-center justify-center space-y-1.5 min-w-0 group cursor-pointer select-none hover:scale-105 active:scale-95 transition-all p-1 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500/20"
+                                    >
                                       <img
                                         src={getFlagUrl(match.team1)!}
                                         alt={match.team1}
-                                        className="w-8 h-5.5 object-cover rounded-sm shadow-md border border-slate-900 shrink-0"
+                                        className="w-8 h-5.5 object-cover rounded-sm shadow-md border border-slate-900 shrink-0 group-hover:shadow-emerald-500/10 transition-shadow"
                                       />
-                                    )}
-                                    <span className="font-bold text-xs sm:text-sm text-slate-200 text-center w-full break-words">
-                                      {match.team1}
-                                    </span>
-                                  </div>
+                                      <span className="font-bold text-xs sm:text-sm text-slate-200 text-center w-full break-words group-hover:text-emerald-400 transition-colors">
+                                        {match.team1}
+                                      </span>
+                                    </button>
+                                  ) : (
+                                    <div className="flex-1 flex flex-col items-center justify-center space-y-1.5 min-w-0">
+                                      <span className="font-bold text-xs sm:text-sm text-slate-400 text-center w-full break-words">
+                                        {match.team1}
+                                      </span>
+                                    </div>
+                                  )}
 
                                   {/* Prediction / Score inputs */}
                                   <div className="flex items-center gap-2 shrink-0">
@@ -1648,18 +1662,29 @@ export default function Home() {
                                   </div>
 
                                   {/* Team 2 */}
-                                  <div className="flex-1 flex flex-col items-center justify-center space-y-1.5 min-w-0">
-                                    {getFlagUrl(match.team2) && (
+                                  {getFlagUrl(match.team2) ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedTeamHistory(match.team2)}
+                                      title={`Ver historial de partidos de ${match.team2}`}
+                                      className="flex-1 flex flex-col items-center justify-center space-y-1.5 min-w-0 group cursor-pointer select-none hover:scale-105 active:scale-95 transition-all p-1 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500/20"
+                                    >
                                       <img
                                         src={getFlagUrl(match.team2)!}
                                         alt={match.team2}
-                                        className="w-8 h-5.5 object-cover rounded-sm shadow-md border border-slate-900 shrink-0"
+                                        className="w-8 h-5.5 object-cover rounded-sm shadow-md border border-slate-900 shrink-0 group-hover:shadow-emerald-500/10 transition-shadow"
                                       />
-                                    )}
-                                    <span className="font-bold text-xs sm:text-sm text-slate-200 text-center w-full break-words">
-                                      {match.team2}
-                                    </span>
-                                  </div>
+                                      <span className="font-bold text-xs sm:text-sm text-slate-200 text-center w-full break-words group-hover:text-emerald-400 transition-colors">
+                                        {match.team2}
+                                      </span>
+                                    </button>
+                                  ) : (
+                                    <div className="flex-1 flex flex-col items-center justify-center space-y-1.5 min-w-0">
+                                      <span className="font-bold text-xs sm:text-sm text-slate-400 text-center w-full break-words">
+                                        {match.team2}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
 
                                 {/* Match Footer */}
@@ -2872,6 +2897,163 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Modal de Historial de Partidos de un Equipo */}
+      {selectedTeamHistory && (() => {
+        const teamMatches = matches
+          .filter(
+            (m) =>
+              (m.team1 === selectedTeamHistory || m.team2 === selectedTeamHistory) &&
+              m.result !== null
+          )
+          .sort((a, b) => {
+            const dateA = getMatchDate(a).getTime();
+            const dateB = getMatchDate(b).getTime();
+            return dateB - dateA;
+          });
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-955/85 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-800 pb-4 shrink-0">
+                <div className="flex items-center space-x-3">
+                  {getFlagUrl(selectedTeamHistory) && (
+                    <img
+                      src={getFlagUrl(selectedTeamHistory)!}
+                      alt={selectedTeamHistory}
+                      className="w-10 h-7 object-cover rounded shadow-md border border-slate-955"
+                    />
+                  )}
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-black text-slate-100">
+                      {selectedTeamHistory}
+                    </h2>
+                    <p className="text-xs text-slate-400">Historial en el Mundial</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedTeamHistory(null)}
+                  className="text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 w-8 h-8 rounded-full flex items-center justify-center transition-colors font-bold cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Match list */}
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+                {teamMatches.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500 text-sm flex flex-col items-center justify-center gap-2">
+                    <span className="text-2xl">⚽</span>
+                    <p>Este equipo aún no ha jugado partidos finalizados en este mundial.</p>
+                  </div>
+                ) : (
+                  teamMatches.map((m) => {
+                    const isTeam1 = m.team1 === selectedTeamHistory;
+                    const teamGoals = isTeam1 ? m.result!.goals1 : m.result!.goals2;
+                    const oppGoals = isTeam1 ? m.result!.goals2 : m.result!.goals1;
+                    const oppName = isTeam1 ? m.team2 : m.team1;
+
+                    let outcome: "win" | "draw" | "loss";
+                    if (teamGoals > oppGoals) outcome = "win";
+                    else if (teamGoals < oppGoals) outcome = "loss";
+                    else outcome = "draw";
+
+                    const outcomeConfig = {
+                      win: {
+                        label: "Victoria",
+                        classes: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
+                        dot: "bg-emerald-400",
+                      },
+                      draw: {
+                        label: "Empate",
+                        classes: "bg-slate-500/10 border-slate-500/30 text-slate-400",
+                        dot: "bg-slate-400",
+                      },
+                      loss: {
+                        label: "Derrota",
+                        classes: "bg-rose-500/10 border-rose-500/30 text-rose-400",
+                        dot: "bg-rose-400",
+                      },
+                    }[outcome];
+
+                    const matchDate = getMatchDate(m);
+                    const formattedDate = matchDate.toLocaleDateString(undefined, {
+                      day: "numeric",
+                      month: "short",
+                    });
+
+                    return (
+                      <div
+                        key={m.id}
+                        className="bg-slate-950/40 border border-slate-850/80 rounded-2xl p-4 flex flex-col gap-3 hover:bg-slate-955/80 transition-all"
+                      >
+                        {/* Match header info */}
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                          <span>{formatRoundName(m.round)}</span>
+                          <span>{formattedDate}</span>
+                        </div>
+
+                        {/* Match Content */}
+                        <div className="flex items-center justify-between gap-3">
+                          {/* Selected Team */}
+                          <div className="flex-1 flex items-center gap-2 min-w-0">
+                            {getFlagUrl(selectedTeamHistory) && (
+                              <img
+                                src={getFlagUrl(selectedTeamHistory)!}
+                                alt={selectedTeamHistory}
+                                className="w-5 h-3.5 object-cover rounded-sm border border-slate-955 shrink-0"
+                              />
+                            )}
+                            <span className="font-extrabold text-xs sm:text-sm text-slate-200 truncate">
+                              {selectedTeamHistory}
+                            </span>
+                          </div>
+
+                          {/* Score and result badge */}
+                          <div className="flex flex-col items-center shrink-0">
+                            <span className="text-sm font-black text-slate-100 bg-slate-950 border border-slate-800/80 px-2.5 py-1 rounded-xl">
+                              {teamGoals} - {oppGoals}
+                            </span>
+                            <span className={`inline-flex items-center gap-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded border mt-1.5 ${outcomeConfig.classes}`}>
+                              <span className={`w-1 h-1 rounded-full ${outcomeConfig.dot}`}></span>
+                              {outcomeConfig.label}
+                            </span>
+                          </div>
+
+                          {/* Opponent */}
+                          <div className="flex-1 flex items-center justify-end gap-2 min-w-0">
+                            <span className="font-semibold text-xs sm:text-sm text-slate-400 truncate text-right">
+                              {oppName}
+                            </span>
+                            {getFlagUrl(oppName) && (
+                              <img
+                                src={getFlagUrl(oppName)!}
+                                alt={oppName}
+                                className="w-5 h-3.5 object-cover rounded-sm border border-slate-955 shrink-0"
+                              />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="pt-2 border-t border-slate-800 flex justify-end shrink-0">
+                <button
+                  onClick={() => setSelectedTeamHistory(null)}
+                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-200 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
