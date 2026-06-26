@@ -182,6 +182,7 @@ export default function Home() {
   const [adminUserDrafts, setAdminUserDrafts] = useState<{ [matchId: string]: { goals1: string; goals2: string } }>({});
   const [adminSavingUserPreds, setAdminSavingUserPreds] = useState<{ [matchId: string]: boolean }>({});
   const [adminRecalculating, setAdminRecalculating] = useState(false);
+  const [adminSyncing, setAdminSyncing] = useState(false);
   const [hidePastMatchesAdmin, setHidePastMatchesAdmin] = useState(true);
   const [editingTeamsMatchId, setEditingTeamsMatchId] = useState<string | null>(null);
   const [editTeam1Draft, setEditTeam1Draft] = useState("");
@@ -854,6 +855,200 @@ export default function Home() {
       alert("Error al recalcular todos los puntajes en Firestore.");
     } finally {
       setAdminRecalculating(false);
+    }
+  };
+
+  const syncApiMatches = async () => {
+    if (adminSyncing) return;
+    const confirmSync = window.confirm("¿Deseas sincronizar los marcadores y estados en vivo desde la API oficial en este momento? Esto actualizará partidos iniciados/finalizados y recalculará los puntos.");
+    if (!confirmSync) return;
+
+    setAdminSyncing(true);
+    try {
+      const apiUrl = "https://worldcup26.ir/get/games";
+      const apiResponse = await fetch(apiUrl);
+      if (!apiResponse.ok) {
+        throw new Error(`Error de la API: ${apiResponse.status}`);
+      }
+
+      const apiData = await apiResponse.json();
+      const apiFixtures = apiData.games || [];
+
+      // Mapeo canónico
+      const mapApiTeamToDbTeam = (apiTeam: string) => {
+        if (!apiTeam) return "";
+        const clean = apiTeam.trim();
+        if (clean === "United States") return "USA";
+        if (clean === "Democratic Republic of the Congo") return "DR Congo";
+        if (clean === "Bosnia and Herzegovina") return "Bosnia & Herzegovina";
+        return clean;
+      };
+
+      const cleanNameLocal = (name: string) => {
+        if (!name) return "";
+        let clean = name.toLowerCase().trim();
+        if (clean === "usa" || clean === "united states") return "unitedstates";
+        if (clean === "dr congo" || clean === "democratic republic of the congo") return "democraticrepublicofthecongo";
+        clean = clean.replace(/&/g, "and");
+        return clean.replace(/[^a-z0-9]/g, "");
+      };
+
+      // Obtener partidos actuales
+      const matchesSnap = await getDocs(collection(db, "matches"));
+      const dbMatches: Match[] = [];
+      matchesSnap.forEach(doc => {
+        dbMatches.push({ ...doc.data() as Match, id: doc.id });
+      });
+
+      let updatedMatchesCount = 0;
+      const batch = writeBatch(db);
+
+      for (const dbMatch of dbMatches) {
+        const dbMatchIdNum = parseInt(dbMatch.id, 10);
+        let fixture = null;
+
+        if (dbMatchIdNum >= 73) {
+          fixture = apiFixtures.find((f: any) => parseInt(f.id, 10) === dbMatchIdNum);
+        } else {
+          fixture = apiFixtures.find((f: any) => {
+            const apiHome = f.home_team_name_en;
+            const apiAway = f.away_team_name_en;
+            return (
+              (cleanNameLocal(apiHome) === cleanNameLocal(dbMatch.team1) && cleanNameLocal(apiAway) === cleanNameLocal(dbMatch.team2)) ||
+              (cleanNameLocal(apiHome) === cleanNameLocal(dbMatch.team2) && cleanNameLocal(apiAway) === cleanNameLocal(dbMatch.team1))
+            );
+          });
+        }
+
+        if (!fixture) continue;
+
+        let teamNamesChanged = false;
+        let updatedTeam1 = dbMatch.team1;
+        let updatedTeam2 = dbMatch.team2;
+
+        if (dbMatchIdNum >= 73 && fixture.home_team_name_en && fixture.away_team_name_en) {
+          const mappedHome = mapApiTeamToDbTeam(fixture.home_team_name_en);
+          const mappedAway = mapApiTeamToDbTeam(fixture.away_team_name_en);
+
+          if (mappedHome !== dbMatch.team1 || mappedAway !== dbMatch.team2) {
+            updatedTeam1 = mappedHome;
+            updatedTeam2 = mappedAway;
+            teamNamesChanged = true;
+          }
+        }
+
+        const isFinished = fixture.finished === "TRUE";
+        const isStarted = fixture.time_elapsed !== "notstarted";
+
+        let resultChanged = false;
+        let newResult = dbMatch.result;
+
+        if (isStarted || isFinished) {
+          const goalsHome = parseInt(fixture.home_score, 10);
+          const goalsAway = parseInt(fixture.away_score, 10);
+
+          if (!isNaN(goalsHome) && !isNaN(goalsAway)) {
+            let realGoals1 = goalsHome;
+            let realGoals2 = goalsAway;
+
+            const checkHome = fixture.home_team_name_en || fixture.home_team_label;
+            if (checkHome && cleanNameLocal(checkHome) === cleanNameLocal(dbMatch.team2)) {
+              realGoals1 = goalsAway;
+              realGoals2 = goalsHome;
+            }
+
+            newResult = { goals1: realGoals1, goals2: realGoals2, isFinal: isFinished };
+
+            const currentResult = dbMatch.result;
+            resultChanged = !currentResult ||
+              currentResult.goals1 !== newResult.goals1 ||
+              currentResult.goals2 !== newResult.goals2 ||
+              currentResult.isFinal !== newResult.isFinal;
+          }
+        }
+
+        if (resultChanged || teamNamesChanged) {
+          const updateData: any = {};
+          if (resultChanged) {
+            updateData.result = newResult;
+          }
+          if (teamNamesChanged) {
+            updateData.team1 = updatedTeam1;
+            updateData.team2 = updatedTeam2;
+          }
+          batch.update(doc(db, "matches", dbMatch.id), updateData);
+          updatedMatchesCount++;
+
+          // Actualizar temporalmente para el cálculo de abajo
+          dbMatch.result = newResult;
+          dbMatch.team1 = updatedTeam1;
+          dbMatch.team2 = updatedTeam2;
+        }
+      }
+
+      if (updatedMatchesCount > 0) {
+        // Ejecutar recalculación completa de puntajes en el mismo batch
+        const predsSnap = await getDocs(collection(db, "predictions"));
+        const matchesMap: { [id: string]: Match } = {};
+        dbMatches.forEach(m => {
+          matchesMap[m.id] = m;
+        });
+
+        const userPointsMap: { [userId: string]: number } = {};
+        const userPreviousPointsMap: { [userId: string]: number } = {};
+
+        predsSnap.forEach(pDoc => {
+          const pred = pDoc.data() as Prediction;
+          const match = matchesMap[pred.matchId];
+
+          let pts = 0;
+          if (match && match.result) {
+            pts = (match.date < "2026-06-13")
+              ? calculatePointsOld(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2)
+              : calculatePointsNew(pred.goals1, pred.goals2, match.result.goals1, match.result.goals2);
+          }
+
+          if (pred.points !== pts) {
+            batch.update(doc(db, "predictions", pred.id), { points: pts });
+          }
+
+          if (match && match.date < "2026-06-13") {
+            if (!userPreviousPointsMap[pred.userId]) {
+              userPreviousPointsMap[pred.userId] = 0;
+            }
+            userPreviousPointsMap[pred.userId] += pts;
+          } else {
+            if (!userPointsMap[pred.userId]) {
+              userPointsMap[pred.userId] = 0;
+            }
+            userPointsMap[pred.userId] += pts;
+          }
+        });
+
+        // Actualizar tabla de usuarios (puntos nuevos y anteriores)
+        const usersSnap = await getDocs(collection(db, "users"));
+        usersSnap.forEach(uDoc => {
+          const uid = uDoc.id;
+          if (uid && uid !== "undefined") {
+            const pts = userPointsMap[uid] || 0;
+            const prevPts = userPreviousPointsMap[uid] || 0;
+            batch.set(doc(db, "users", uid), { points: pts, previousPoints: prevPts }, { merge: true });
+          }
+        });
+
+        await batch.commit();
+        // Bump matches_version so clients invalidate their active cache on next load
+        await setDoc(doc(db, "meta", "matches_version"), { updatedAt: Date.now() }, { merge: true });
+        alert(`Sincronización exitosa. Se actualizaron ${updatedMatchesCount} partidos y se recalcularon todos los puntajes.`);
+      } else {
+        await batch.commit();
+        alert("Sincronización completada. No hubo cambios en los marcadores ni equipos.");
+      }
+    } catch (err: any) {
+      console.error("Error syncing API matches:", err);
+      alert(`Error al sincronizar: ${err?.message || err}`);
+    } finally {
+      setAdminSyncing(false);
     }
   };
 
@@ -2122,13 +2317,22 @@ export default function Home() {
                           Controla los resultados reales del mundial o ajusta las predicciones de los participantes de forma manual.
                         </p>
                       </div>
-                      <button
-                        onClick={recalculateAllScores}
-                        disabled={adminRecalculating}
-                        className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-all self-start md:self-center"
-                      >
-                        {adminRecalculating ? "Recalculando..." : "🔄 Recalcular Todos los Puntos"}
-                      </button>
+                      <div className="flex flex-wrap gap-2 self-start md:self-center">
+                        <button
+                          onClick={syncApiMatches}
+                          disabled={adminSyncing}
+                          className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center space-x-1 cursor-pointer"
+                        >
+                          <span>{adminSyncing ? "Sincronizando..." : "⚡ Sincronizar Marcadores API"}</span>
+                        </button>
+                        <button
+                          onClick={recalculateAllScores}
+                          disabled={adminRecalculating}
+                          className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+                        >
+                          {adminRecalculating ? "Recalculando..." : "🔄 Recalcular Todos los Puntos"}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Sub-Tabs Navigation */}
