@@ -138,7 +138,8 @@ export default function Home() {
     signup,
     logout,
     switchAccount,
-    removeSavedAccount
+    removeSavedAccount,
+    sendPasswordReset
   } = useAuth();
 
   // Auth state inputs
@@ -146,6 +147,8 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
 
@@ -204,7 +207,7 @@ export default function Home() {
   // View team history modal states
   const [selectedTeamHistory, setSelectedTeamHistory] = useState<string | null>(null);
 
-  // Auth Handler
+  // Auth Handlers
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
@@ -224,6 +227,27 @@ export default function Home() {
       if (err.code === "auth/email-already-in-use") msg = "El correo ya está registrado.";
       if (err.code === "auth/invalid-credential") msg = "Correo o contraseña incorrectos.";
       if (err.code === "auth/weak-password") msg = "La contraseña debe tener al menos 6 caracteres.";
+      setAuthError(err.message || msg);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    setAuthLoading(true);
+    try {
+      if (!email.trim()) {
+        throw new Error("El correo es obligatorio");
+      }
+      await sendPasswordReset(email.trim());
+      setResetEmailSent(true);
+    } catch (err: any) {
+      console.error(err);
+      let msg = "Ocurrió un error al enviar el correo.";
+      if (err.code === "auth/invalid-email") msg = "El correo no es válido.";
+      if (err.code === "auth/user-not-found") msg = "No existe un usuario con este correo.";
       setAuthError(err.message || msg);
     } finally {
       setAuthLoading(false);
@@ -1188,11 +1212,15 @@ export default function Home() {
               Familia Güiza • Ardila • Franco y otros jajaja
             </p>
             <p className="text-slate-400 text-sm mt-2">
-              {isRegistering ? "Regístrate para pronosticar los 104 partidos" : "Inicia sesión para ver tu puntaje y pronósticos"}
+              {isForgotPassword 
+                ? "Recuperar contraseña" 
+                : isRegistering 
+                ? "Regístrate para pronosticar los 104 partidos" 
+                : "Inicia sesión para ver tu puntaje y pronósticos"}
             </p>
           </div>
 
-          {savedAccounts.length > 0 && !isRegistering && (
+          {savedAccounts.length > 0 && !isRegistering && !isForgotPassword && (
             <div className="mb-6 border-b border-slate-800/60 pb-5">
               <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5">
                 Ingresar con cuenta guardada:
@@ -1239,75 +1267,168 @@ export default function Home() {
             </div>
           )}
 
-          <form onSubmit={handleAuthSubmit} className="space-y-4">
-            {isRegistering && (
+          {isForgotPassword ? (
+            resetEmailSent ? (
+              <div className="space-y-6 text-center">
+                <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm px-4 py-5 rounded-xl">
+                  <span className="text-3xl mb-2 block">📧</span>
+                  <p className="font-bold text-base mb-1">¡Correo enviado!</p>
+                  <p className="text-xs text-slate-400">
+                    Hemos enviado un enlace a <strong className="text-emerald-400">{email}</strong> para restablecer tu contraseña. Revisa tu bandeja de entrada o spam.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotPassword(false);
+                    setResetEmailSent(false);
+                    setAuthError("");
+                  }}
+                  className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl active:scale-[0.98] transition-all duration-200"
+                >
+                  Volver a Iniciar Sesión
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleResetSubmit} className="space-y-4">
+                <p className="text-slate-450 text-xs text-center leading-relaxed">
+                  Ingresa tu correo electrónico registrado y te enviaremos un enlace seguro para restablecer tu contraseña.
+                </p>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Correo Electrónico</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="usuario@correo.com"
+                    required
+                    className="w-full px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-xl focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-slate-100 transition-colors"
+                  />
+                </div>
+
+                {authError && (
+                  <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm px-4 py-3 rounded-xl">
+                    ⚠️ {authError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={authLoading}
+                  className="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-450 text-slate-950 font-bold rounded-xl shadow-lg hover:shadow-amber-500/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center disabled:opacity-50"
+                >
+                  {authLoading ? (
+                    <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    "Enviar Enlace de Recuperación"
+                  )}
+                </button>
+
+                <div className="text-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsForgotPassword(false);
+                      setAuthError("");
+                    }}
+                    className="text-amber-400 hover:text-amber-300 text-xs font-semibold transition-colors"
+                  >
+                    ← Volver a Iniciar Sesión
+                  </button>
+                </div>
+              </form>
+            )
+          ) : (
+            <form onSubmit={handleAuthSubmit} className="space-y-4">
+              {isRegistering && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Nombre Completo</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ej. Santiago Barrera"
+                    required
+                    className="w-full px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-xl focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-slate-100 transition-colors"
+                  />
+                </div>
+              )}
+
               <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Nombre Completo</label>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Correo Electrónico</label>
                 <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ej. Santiago Barrera"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="usuario@correo.com"
                   required
                   className="w-full px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-xl focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-slate-100 transition-colors"
                 />
               </div>
-            )}
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Correo Electrónico</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="usuario@correo.com"
-                required
-                className="w-full px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-xl focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-slate-100 transition-colors"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Contraseña</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="******"
-                required
-                className="w-full px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-xl focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-slate-100 transition-colors"
-              />
-            </div>
-
-            {authError && (
-              <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm px-4 py-3 rounded-xl">
-                ⚠️ {authError}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Contraseña</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="******"
+                  required
+                  className="w-full px-4 py-3 bg-slate-950/50 border border-slate-800 rounded-xl focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-slate-100 transition-colors"
+                />
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={authLoading}
-              className="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-450 text-slate-950 font-bold rounded-xl shadow-lg hover:shadow-amber-500/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center disabled:opacity-50"
-            >
-              {authLoading ? (
-                <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
-              ) : isRegistering ? (
-                "Crear Cuenta"
-              ) : (
-                "Ingresar"
+              {!isRegistering && (
+                <div className="text-right">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsForgotPassword(true);
+                      setAuthError("");
+                    }}
+                    className="text-amber-400/80 hover:text-amber-300 text-xs font-semibold transition-colors"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                </div>
               )}
-            </button>
-          </form>
+
+              {authError && (
+                <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm px-4 py-3 rounded-xl">
+                  ⚠️ {authError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-450 text-slate-950 font-bold rounded-xl shadow-lg hover:shadow-amber-500/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center disabled:opacity-50"
+              >
+                {authLoading ? (
+                  <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+                ) : isRegistering ? (
+                  "Crear Cuenta"
+                ) : (
+                  "Ingresar"
+                )}
+              </button>
+            </form>
+          )}
 
           <div className="mt-6 text-center">
             <button
               onClick={() => {
                 setIsRegistering(!isRegistering);
+                setIsForgotPassword(false);
                 setAuthError("");
               }}
               className="text-amber-400 hover:text-amber-300 text-sm font-medium transition-colors"
             >
-              {isRegistering ? "¿Ya tienes cuenta? Inicia Sesión" : "¿No tienes cuenta? Regístrate aquí"}
+              {isForgotPassword
+                ? "¿Ya tienes cuenta? Inicia Sesión"
+                : isRegistering
+                ? "¿Ya tienes cuenta? Inicia Sesión"
+                : "¿No tienes cuenta? Regístrate aquí"}
             </button>
           </div>
         </div>
