@@ -15,7 +15,8 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { calculatePoints, calculatePointsOld, calculatePointsNew } from "@/lib/scoreCalculator";
-import { getFlagUrl } from "@/lib/flags";
+import { getFlagUrl, availableTeams } from "@/lib/flags";
+import worldCupData from "./worldcup2026.json";
 
 // Interfaces
 interface Match {
@@ -182,6 +183,10 @@ export default function Home() {
   const [adminSavingUserPreds, setAdminSavingUserPreds] = useState<{ [matchId: string]: boolean }>({});
   const [adminRecalculating, setAdminRecalculating] = useState(false);
   const [hidePastMatchesAdmin, setHidePastMatchesAdmin] = useState(true);
+  const [editingTeamsMatchId, setEditingTeamsMatchId] = useState<string | null>(null);
+  const [editTeam1Draft, setEditTeam1Draft] = useState("");
+  const [editTeam2Draft, setEditTeam2Draft] = useState("");
+  const [savingTeams, setSavingTeams] = useState(false);
 
   // User Management State
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
@@ -852,6 +857,55 @@ export default function Home() {
     }
   };
 
+  const handleSaveTeams = async (matchId: string) => {
+    if (!editTeam1Draft.trim() || !editTeam2Draft.trim()) {
+      alert("Los nombres de los equipos no pueden estar vacíos.");
+      return;
+    }
+    setSavingTeams(true);
+    try {
+      const matchRef = doc(db, "matches", matchId);
+      await setDoc(matchRef, {
+        team1: editTeam1Draft.trim(),
+        team2: editTeam2Draft.trim()
+      }, { merge: true });
+
+      // Update local state
+      setMatches(prevMatches =>
+        prevMatches.map(m => (m.id === matchId ? { ...m, team1: editTeam1Draft.trim(), team2: editTeam2Draft.trim() } : m))
+      );
+
+      // Sync local storage caches
+      try {
+        const archivedStr = localStorage.getItem("polla_archived_cache");
+        const activeStr = localStorage.getItem("polla_active_cache");
+        if (archivedStr) {
+          const archived = JSON.parse(archivedStr) as Match[];
+          const updated = archived.map(m => m.id === matchId ? { ...m, team1: editTeam1Draft.trim(), team2: editTeam2Draft.trim() } : m);
+          localStorage.setItem("polla_archived_cache", JSON.stringify(updated));
+        }
+        if (activeStr) {
+          const active = JSON.parse(activeStr) as Match[];
+          const updated = active.map(m => m.id === matchId ? { ...m, team1: editTeam1Draft.trim(), team2: editTeam2Draft.trim() } : m);
+          localStorage.setItem("polla_active_cache", JSON.stringify(updated));
+        }
+      } catch (e) {
+        console.error("Error updating local storage cache for team edit:", e);
+      }
+
+      // Notify clients their active cache is stale
+      await setDoc(doc(db, "meta", "matches_version"), { updatedAt: Date.now() }, { merge: true });
+
+      setEditingTeamsMatchId(null);
+      alert("Equipos del partido actualizados exitosamente.");
+    } catch (err) {
+      console.error("Error updating match teams:", err);
+      alert("Error al actualizar los equipos del partido.");
+    } finally {
+      setSavingTeams(false);
+    }
+  };
+
   const deleteUserByAdmin = async (uid: string, displayName: string) => {
     if (!user || !profile?.isAdmin) return;
     const confirmDelete = window.confirm(`¿Estás seguro de que deseas eliminar permanentemente a "${displayName}" y todos sus pronósticos? Esta acción no se puede deshacer.`);
@@ -1497,8 +1551,6 @@ export default function Home() {
               {user && financialStats.stats[user.uid] && (
                 <div className="hidden md:flex items-center space-x-3 bg-slate-900/60 border border-slate-800 rounded-full px-4 py-1.5 text-[11px] text-slate-350">
                   <span>Debe aportar: <strong className="text-slate-200">${financialStats.stats[user.uid].invested} COP</strong></span>
-                  <span className="text-slate-700">|</span>
-                  <span>Premios Ganados: <strong className="text-amber-400">${financialStats.stats[user.uid].winnings.toFixed(0)} COP</strong></span>
                 </div>
               )}
             </div>
@@ -1968,7 +2020,6 @@ export default function Home() {
                             <th className="py-3 sm:py-4 px-3 sm:px-6">Jugador</th>
                             <th className="py-3 sm:py-4 px-3 sm:px-6 text-center">Apostados</th>
                             <th className="py-3 sm:py-4 px-3 sm:px-6 text-right">Inversión</th>
-                            <th className="py-3 sm:py-4 px-3 sm:px-6 text-right">Premios</th>
                             <th className="py-3 sm:py-4 px-3 sm:px-6 text-right w-24">Puntos</th>
                           </tr>
                         </thead>
@@ -2003,9 +2054,6 @@ export default function Home() {
                                 </td>
                                 <td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-slate-400">
                                   ${userStats.invested}
-                                </td>
-                                <td className="py-3 sm:py-4 px-3 sm:px-6 text-right text-amber-400">
-                                  ${userStats.winnings.toFixed(0)}
                                 </td>
                                 <td className="py-3 sm:py-4 px-3 sm:px-6 text-right font-extrabold text-amber-400">
                                   {pts}
@@ -2198,25 +2246,113 @@ export default function Home() {
                                     >
                                       <div className="flex-1">
                                         <span className="text-xs text-amber-500 font-semibold">{formatRoundName(match.round)} • Partido {match.num}</span>
-                                        <h3 className="font-bold text-slate-200 mt-0.5 flex items-center space-x-2">
-                                          {getFlagUrl(match.team1) && (
-                                            <img
-                                              src={getFlagUrl(match.team1)!}
-                                              alt={match.team1}
-                                              className="w-5 h-3.5 object-cover rounded-sm shadow-sm border border-slate-900"
-                                            />
-                                          )}
-                                          <span>{match.team1}</span>
-                                          <span className="text-slate-500 font-semibold text-xs">vs</span>
-                                          <span>{match.team2}</span>
-                                          {getFlagUrl(match.team2) && (
-                                            <img
-                                              src={getFlagUrl(match.team2)!}
-                                              alt={match.team2}
-                                              className="w-5 h-3.5 object-cover rounded-sm shadow-sm border border-slate-900"
-                                            />
-                                          )}
-                                        </h3>
+                                        {editingTeamsMatchId === match.id ? (
+                                          <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 mt-1.5 w-full">
+                                            {/* Selects Row */}
+                                            <div className="flex items-center space-x-2">
+                                              <select
+                                                value={editTeam1Draft}
+                                                onChange={(e) => setEditTeam1Draft(e.target.value)}
+                                                className="px-2 py-1 bg-slate-950 border border-slate-800 text-xs rounded-lg text-slate-200 w-[120px] focus:outline-none focus:border-amber-500 font-medium cursor-pointer"
+                                              >
+                                                {!availableTeams.includes(editTeam1Draft) && (
+                                                  <option value={editTeam1Draft}>{editTeam1Draft}</option>
+                                                )}
+                                                {availableTeams.map((team) => (
+                                                  <option key={team} value={team}>
+                                                    {team}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                              <span className="text-slate-500 text-xs font-bold shrink-0">vs</span>
+                                              <select
+                                                value={editTeam2Draft}
+                                                onChange={(e) => setEditTeam2Draft(e.target.value)}
+                                                className="px-2 py-1 bg-slate-950 border border-slate-800 text-xs rounded-lg text-slate-200 w-[120px] focus:outline-none focus:border-amber-500 font-medium cursor-pointer"
+                                              >
+                                                {!availableTeams.includes(editTeam2Draft) && (
+                                                  <option value={editTeam2Draft}>{editTeam2Draft}</option>
+                                                )}
+                                                {availableTeams.map((team) => (
+                                                  <option key={team} value={team}>
+                                                    {team}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </div>
+                                            
+                                            {/* Buttons Row */}
+                                            <div className="flex items-center space-x-2">
+                                              <button
+                                                type="button"
+                                                disabled={savingTeams}
+                                                onClick={() => handleSaveTeams(match.id)}
+                                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] rounded-lg transition-all cursor-pointer flex items-center justify-center space-x-1"
+                                                title="Guardar"
+                                              >
+                                                <span>{savingTeams ? "..." : "✓"}</span>
+                                                <span className="sm:hidden text-[9px] font-bold">Guardar</span>
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  const idx = parseInt(match.id, 10) - 1;
+                                                  const defaultMatch = worldCupData.matches[idx];
+                                                  if (defaultMatch) {
+                                                    setEditTeam1Draft(defaultMatch.team1);
+                                                    setEditTeam2Draft(defaultMatch.team2);
+                                                  }
+                                                }}
+                                                className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-[10px] rounded-lg transition-all cursor-pointer flex items-center justify-center space-x-1"
+                                                title="Restablecer original (placeholder)"
+                                              >
+                                                <span>🔄</span>
+                                                <span className="sm:hidden text-[9px] font-bold">Revertir</span>
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => setEditingTeamsMatchId(null)}
+                                                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[10px] rounded-lg transition-all cursor-pointer flex items-center justify-center space-x-1"
+                                                title="Cancelar"
+                                              >
+                                                <span>✕</span>
+                                                <span className="sm:hidden text-[9px] font-bold">Cancelar</span>
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <h3 className="font-bold text-slate-200 mt-0.5 flex items-center space-x-2">
+                                            {getFlagUrl(match.team1) && (
+                                              <img
+                                                src={getFlagUrl(match.team1)!}
+                                                alt={match.team1}
+                                                className="w-5 h-3.5 object-cover rounded-sm shadow-sm border border-slate-900"
+                                              />
+                                            )}
+                                            <span>{match.team1}</span>
+                                            <span className="text-slate-500 font-semibold text-xs">vs</span>
+                                            <span>{match.team2}</span>
+                                            {getFlagUrl(match.team2) && (
+                                              <img
+                                                src={getFlagUrl(match.team2)!}
+                                                alt={match.team2}
+                                                className="w-5 h-3.5 object-cover rounded-sm shadow-sm border border-slate-900"
+                                              />
+                                            )}
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setEditingTeamsMatchId(match.id);
+                                                setEditTeam1Draft(match.team1);
+                                                setEditTeam2Draft(match.team2);
+                                              }}
+                                              className="text-amber-400/80 hover:text-amber-300 p-1 text-[11px] hover:bg-slate-800/80 rounded transition-all cursor-pointer"
+                                              title="Editar Equipos"
+                                            >
+                                              ✏️
+                                            </button>
+                                          </h3>
+                                        )}
                                         <span className="text-[10px] text-slate-500">{match.ground} • {localTimeStr} {tzAbbr}</span>
                                       </div>
 

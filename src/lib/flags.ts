@@ -49,6 +49,8 @@ const countryCodes: { [key: string]: string } = {
   "Panama": "pa"
 };
 
+export const availableTeams = Object.keys(countryCodes).sort();
+
 /**
  * Retorna la URL de la bandera del país usando FlagCDN.
  * Si es un marcador de posición (ej. W74, 2A), retorna null.
