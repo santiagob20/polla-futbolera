@@ -2449,7 +2449,10 @@ export default function Home() {
                                       className="bg-slate-900/40 border border-slate-900/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
                                     >
                                       <div className="flex-1">
-                                        <span className="text-xs text-amber-500 font-semibold">{formatRoundName(match.round)} • Partido {match.num}</span>
+                                        <span className="text-xs text-amber-500 font-semibold">
+                                          {formatRoundName(match.round)} • Partido {match.num}
+                                          <span className="text-slate-500 font-normal ml-1.5">(ID: {match.id})</span>
+                                        </span>
                                         {editingTeamsMatchId === match.id ? (
                                           <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 mt-1.5 w-full">
                                             {/* Selects Row */}
@@ -2780,7 +2783,10 @@ export default function Home() {
                                       >
                                         {/* Match Team Info */}
                                         <div className="flex-1">
-                                          <span className="text-xs text-amber-500 font-semibold">{formatRoundName(match.round)} • Partido {match.num}</span>
+                                          <span className="text-xs text-amber-500 font-semibold">
+                                            {formatRoundName(match.round)} • Partido {match.num}
+                                            <span className="text-slate-500 font-normal ml-1.5">(ID: {match.id})</span>
+                                          </span>
                                           <h3 className="font-bold text-slate-200 mt-0.5 flex items-center space-x-2">
                                             {getFlagUrl(match.team1) && (
                                               <img
